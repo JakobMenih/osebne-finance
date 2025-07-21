@@ -1,3 +1,4 @@
+version: '3.8'
 services:
   postgres:
     image: postgres:15
@@ -14,9 +15,14 @@ services:
     build:
       context: ./osebne-finance-backend
       dockerfile: Dockerfile
+
+    volumes:
+      - ./osebne-finance-backend:/app
+      - /app/node_modules
     ports:
       - "3000:3000"
     environment:
       DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/osebne_finance"
     depends_on:
       - postgres
+    command: npm run start:dev
