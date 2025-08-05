@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, ParseUUIDPipe, Req } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuditLogsService } from './audit-logs.service';
 
@@ -8,12 +8,12 @@ export class AuditLogsController {
     constructor(private readonly svc: AuditLogsService) {}
 
     @Get()
-    getAll() {
-        return this.svc.findAll();
+    getAll(@Req() req) {
+        return this.svc.findAll(req.user.sub);
     }
 
     @Get(':id')
-    getOne(@Param('id', ParseUUIDPipe) id: string) {
-        return this.svc.findOne(id);
+    getOne(@Req() req, @Param('id', ParseUUIDPipe) id: string) {
+        return this.svc.findOne(id, req.user.sub);
     }
 }

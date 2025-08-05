@@ -1,15 +1,4 @@
-import {
-    Controller,
-    Get,
-    Post,
-    Body,
-    Param,
-    Patch,
-    Delete,
-    Req,
-    UseGuards,
-    ParseUUIDPipe,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Delete, Req, UseGuards, ParseUUIDPipe } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
@@ -26,10 +15,7 @@ export class CategoriesController {
     }
 
     @Get(':id')
-    getOne(
-        @Req() req,
-        @Param('id', ParseUUIDPipe) id: string
-    ) {
+    getOne(@Req() req, @Param('id', ParseUUIDPipe) id: string) {
         return this.svc.findOne(id, req.user.sub);
     }
 
@@ -39,11 +25,7 @@ export class CategoriesController {
     }
 
     @Patch(':id')
-    update(
-        @Req() req,
-        @Param('id', ParseUUIDPipe) id: string,
-        @Body() dto: UpdateCategoryDto
-    ) {
+    update(@Req() req, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCategoryDto) {
         return this.svc.update(id, req.user.sub, dto);
     }
 

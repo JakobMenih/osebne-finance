@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUploadDto } from './dto/create-upload.dto';
 
@@ -15,7 +15,9 @@ export class UploadsService {
     }
 
     create(userId: string, dto: CreateUploadDto) {
-        return this.prisma.upload.create({ data: { userId, ...dto } });
+        return this.prisma.upload.create({
+            data: { userId, ...dto }
+        });
     }
 
     remove(id: string, userId: string) {

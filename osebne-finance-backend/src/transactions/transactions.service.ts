@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
@@ -8,19 +8,26 @@ export class TransactionsService {
     constructor(private prisma: PrismaService) {}
 
     findAll(userId: string) {
-        return this.prisma.transaction.findMany({ where: { userId }, include: { lines: true } });
+        return this.prisma.transaction.findMany({ where: { userId } });
     }
 
     findOne(id: string, userId: string) {
-        return this.prisma.transaction.findFirstOrThrow({ where: { id, userId }, include: { lines: true } });
+        return this.prisma.transaction.findFirstOrThrow({ where: { id, userId } });
     }
 
     create(userId: string, dto: CreateTransactionDto) {
-        return this.prisma.transaction.create({ data: { userId, date: new Date(dto.date), description: dto.description, metadata: dto.metadata } });
+        return this.prisma.transaction.create({
+            data: { userId, ...dto }
+        });
     }
 
-    update(id: string, userId: string, dto: UpdateTransactionDto) {
-        return this.prisma.transaction.updateMany({ where: { id, userId }, data: { date: dto.date ? new Date(dto.date) : undefined, description: dto.description, metadata: dto.metadata } });
+    async update(id: string, userId: string, dto: UpdateTransactionDto) {
+        const updated = await this.prisma.transaction.updateMany({
+            where: { id, userId },
+            data: dto
+        });
+        if (updated.count === 0) throw new NotFoundException(`Transaction with id ${id} not found`);
+        return this.prisma.transaction.findFirst({ where: { id, userId } });
     }
 
     remove(id: string, userId: string) {

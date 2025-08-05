@@ -11,128 +11,122 @@ model User {
   id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email        String        @unique
   passwordHash String        @map("password_hash")
-  settings     Json          @default("{}")
   createdAt    DateTime      @default(now()) @map("created_at")
+  settings     Json          @default("{}")
   accounts     Account[]
+  auditLogs    AuditLog[]
+  budgets      Budget[]
   categories   Category[]
   transactions Transaction[]
-  budgets      Budget[]
   uploads      Upload[]
-  auditLogs    AuditLog[]
+
+  @@map("users")
 }
 
 model Account {
   id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String            @map("user_id") @db.Uuid
   name      String
-  type      AccountType
-  currency  String
+  type      String
+  currency  String            @db.Char(3)
   metadata  Json              @default("{}")
   createdAt DateTime          @default(now()) @map("created_at")
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   lines     TransactionLine[]
 
-  @@index([userId])
-}
-
-model Category {
-  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId           String            @map("user_id") @db.Uuid
-  name             String
-  type             CategoryType
-  parent           Category?         @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: SetNull)
-  parentId         String?           @map("parent_id") @db.Uuid
-  children         Category[]        @relation("CategoryToCategory")
-  transactionLines TransactionLine[] @relation("CategoryToTransactionLines")
-  budgets          Budget[]
-  createdAt        DateTime          @default(now()) @map("created_at")
-
-  @@index([userId])
-}
-
-model Transaction {
-  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String            @map("user_id") @db.Uuid
-  date        DateTime          @db.Date
-  description String?
-  metadata    Json              @default("{}")
-  createdAt   DateTime          @default(now()) @map("created_at")
-  lines       TransactionLine[]
-
-  @@index([userId])
-}
-
-model TransactionLine {
-  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  transactionId String      @map("transaction_id") @db.Uuid
-  account       Account     @relation(fields: [accountId], references: [id])
-  accountId     String      @map("account_id") @db.Uuid
-  category      Category?   @relation("CategoryToTransactionLines", fields: [categoryId], references: [id])
-  categoryId    String?     @map("category_id") @db.Uuid
-  amount        Decimal     @db.Decimal(14, 2)
-  currency      String
-  description   String?
-  createdAt     DateTime    @default(now()) @map("created_at")
-
-  @@index([accountId])
-  @@index([transactionId])
-}
-
-model Budget {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String   @map("user_id") @db.Uuid
-  category    Category @relation(fields: [categoryId], references: [id])
-  categoryId  String   @map("category_id") @db.Uuid
-  periodStart DateTime @map("period_start") @db.Date
-  periodEnd   DateTime @map("period_end") @db.Date
-  amount      Decimal  @db.Decimal(14, 2)
-  metadata    Json     @default("{}")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  @@unique([userId, categoryId, periodStart])
-  @@index([userId, categoryId, periodStart])
-}
-
-model Upload {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId       String   @map("user_id") @db.Uuid
-  source       String?
-  fileMetadata Json     @default("{}") @map("file_metadata")
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  @@index([userId])
-}
-
-model AuditLog {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tableName String   @map("table_name")
-  recordId  String   @map("record_id") @db.Uuid
-  action    String
-  oldData   Json?    @map("old_data")
-  newData   Json?    @map("new_data")
-  user      User?    @relation(fields: [userId], references: [id])
-  userId    String?  @map("user_id") @db.Uuid
-  ts        DateTime @default(now())
-
-  @@index([tableName, recordId])
-}
-
-enum AccountType {
-  checking
-  savings
-  credit
-  cash
-  asset
-  liability
+  @@unique([id, userId])
+  @@map("accounts")
 }
 
 enum CategoryType {
   expense
   income
   transfer
+}
+
+model Category {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String       @map("user_id") @db.Uuid
+  name      String       @db.Text
+  type      CategoryType
+  parentId  String?      @map("parent_id") @db.Uuid
+  createdAt DateTime     @map("created_at") @default(now())
+
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent    Category?    @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[]   @relation("CategoryToCategory")
+  budgets   Budget[]
+  lines     TransactionLine[]
+
+  @@map("categories")
+}
+
+model Transaction {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String            @map("user_id") @db.Uuid
+  date        DateTime          @db.Date
+  description String?
+  metadata    Json              @default("{}")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  lines       TransactionLine[]
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("transactions")
+}
+
+model TransactionLine {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transactionId String      @map("transaction_id") @db.Uuid
+  accountId     String      @map("account_id") @db.Uuid
+  categoryId    String?     @map("category_id") @db.Uuid
+  amount        Decimal     @db.Decimal(14, 2)
+  currency      String      @db.Char(3)
+  description   String?
+  createdAt     DateTime    @default(now()) @map("created_at")
+  account       Account     @relation(fields: [accountId], references: [id])
+  category      Category?   @relation(fields: [categoryId], references: [id])
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@map("transaction_lines")
+}
+
+model Budget {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  categoryId  String   @map("category_id") @db.Uuid
+  periodStart DateTime @map("period_start") @db.Date
+  periodEnd   DateTime @map("period_end") @db.Date
+  amount      Decimal  @db.Decimal(14, 2)
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+  category    Category @relation(fields: [categoryId], references: [id])
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId, periodStart])
+  @@map("budgets")
+}
+
+model Upload {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  source       String?
+  fileMetadata Json     @default("{}") @map("file_metadata")
+  createdAt    DateTime @default(now()) @map("created_at")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("uploads")
+}
+
+model AuditLog {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tableName String   @map("table_name")
+  recordId  String   @map("record_id") @db.Uuid
+  action    String   @db.Char(1)
+  oldData   Json?
+  newData   Json?
+  userId    String?  @map("user_id") @db.Uuid
+  ts        DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
 }

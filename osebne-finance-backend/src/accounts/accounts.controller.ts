@@ -1,35 +1,38 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards, ParseUUIDPipe } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
-import { Account as AccountModel, Prisma } from '@prisma/client';
+import { Prisma, Account } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('accounts')
+@UseGuards(JwtAuthGuard)
 export class AccountsController {
     constructor(private readonly accountsService: AccountsService) {}
 
     @Post()
-    create(@Body() data: Prisma.AccountCreateInput): Promise<AccountModel> {
-        return this.accountsService.create(data);
+    create(@Req() req, @Body() data: Prisma.AccountCreateInput): Promise<Account> {
+        return this.accountsService.create({
+            ...data,
+            user: { connect: { id: req.user.sub } }
+        });
     }
 
     @Get()
-    findAll(): Promise<AccountModel[]> {
-        return this.accountsService.findAll();
+    findAll(@Req() req): Promise<Account[]> {
+        return this.accountsService.findAll(req.user.sub);
     }
 
     @Get(':id')
-    findOne(
-        @Param('id') id: string
-    ): Promise<AccountModel> {
-        return this.accountsService.findOneOrThrow(id);
+    findOne(@Req() req, @Param('id', ParseUUIDPipe) id: string): Promise<Account> {
+        return this.accountsService.findOneOrThrow(id, req.user.sub);
     }
 
     @Patch(':id')
-    update(@Param('id') id: string, @Body() data: Prisma.AccountUpdateInput): Promise<AccountModel> {
-        return this.accountsService.update(id, data);
+    update(@Req() req, @Param('id', ParseUUIDPipe) id: string, @Body() data: Prisma.AccountUpdateInput): Promise<Account> {
+        return this.accountsService.update(id, req.user.sub, data);
     }
 
     @Delete(':id')
-    remove(@Param('id') id: string): Promise<AccountModel> {
-        return this.accountsService.remove(id);
+    remove(@Req() req, @Param('id', ParseUUIDPipe) id: string): Promise<Account> {
+        return this.accountsService.remove(id, req.user.sub);
     }
 }

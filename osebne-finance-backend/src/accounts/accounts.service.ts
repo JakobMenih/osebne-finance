@@ -1,4 +1,4 @@
-import {Injectable, NotFoundException} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Account, Prisma } from '@prisma/client';
 
@@ -10,22 +10,28 @@ export class AccountsService {
         return this.prisma.account.create({ data });
     }
 
-    findAll(): Promise<Account[]> {
-        return this.prisma.account.findMany();
+    findAll(userId: string): Promise<Account[]> {
+        return this.prisma.account.findMany({ where: { userId } });
     }
 
-    async findOneOrThrow(id: string): Promise<Account> {
-        const account = await this.prisma.account.findUnique({ where: { id } });
+    async findOneOrThrow(id: string, userId: string): Promise<Account> {
+        const account = await this.prisma.account.findFirst({ where: { id, userId } });
         if (!account) throw new NotFoundException(`Account with id ${id} not found`);
         return account;
     }
 
-    update(id: string, data: Prisma.AccountUpdateInput): Promise<Account> {
-        return this.prisma.account.update({ where: { id }, data });
+    async update(id: string, userId: string, data: Prisma.AccountUpdateInput): Promise<Account> {
+        const updated = await this.prisma.account.updateMany({
+            where: { id, userId },
+            data
+        });
+        if (updated.count === 0) throw new NotFoundException(`Account with id ${id} not found`);
+        return this.prisma.account.findFirst({ where: { id, userId } }) as Promise<Account>;
     }
 
-    remove(id: string): Promise<Account> {
-        return this.prisma.account.delete({ where: { id } });
+    remove(id: string, userId: string): Promise<Account> {
+        return this.prisma.account.delete({
+            where: { id_userId: { id, userId } }
+        });
     }
-
 }

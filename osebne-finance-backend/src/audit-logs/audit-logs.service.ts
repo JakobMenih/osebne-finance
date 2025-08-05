@@ -5,11 +5,11 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AuditLogsService {
     constructor(private prisma: PrismaService) {}
 
-    findAll() {
-        return this.prisma.auditLog.findMany();
+    findAll(userId: string) {
+        return this.prisma.auditLog.findMany({ where: { userId } });
     }
 
-    findOne(id: string) {
-        return this.prisma.auditLog.findUniqueOrThrow({ where: { id } });
+    findOne(id: string, userId: string) {
+        return this.prisma.auditLog.findFirstOrThrow({ where: { id, userId } });
     }
 }
