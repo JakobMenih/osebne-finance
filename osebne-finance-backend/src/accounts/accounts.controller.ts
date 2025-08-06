@@ -9,11 +9,8 @@ export class AccountsController {
     constructor(private readonly accountsService: AccountsService) {}
 
     @Post()
-    create(@Req() req, @Body() data: Prisma.AccountCreateInput): Promise<Account> {
-        return this.accountsService.create({
-            ...data,
-            user: { connect: { id: req.user.sub } }
-        });
+    create(@Req() req, @Body() data: Omit<Prisma.AccountCreateInput, 'user'>) {
+        return this.accountsService.create(req.user.sub, data);
     }
 
     @Get()

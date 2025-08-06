@@ -11,9 +11,14 @@ import { BudgetsModule } from './budgets/budgets.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { UsersModule } from './users/users.module';
+import {ConfigModule} from "@nestjs/config";
 
 @Module({
-  imports: [PrismaModule, AccountsModule, AuthModule,
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
+    AccountsModule,
+    AuthModule,
     CategoriesModule,
     TransactionsModule,
     TransactionLinesModule,

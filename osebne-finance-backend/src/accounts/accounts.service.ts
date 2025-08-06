@@ -6,8 +6,13 @@ import { Account, Prisma } from '@prisma/client';
 export class AccountsService {
     constructor(private prisma: PrismaService) {}
 
-    create(data: Prisma.AccountCreateInput): Promise<Account> {
-        return this.prisma.account.create({ data });
+    create(userId: string, data: Omit<Prisma.AccountCreateInput, 'user'>) {
+        return this.prisma.account.create({
+            data: {
+                ...data,
+                user: { connect: { id: userId } }
+            }
+        });
     }
 
     findAll(userId: string): Promise<Account[]> {
