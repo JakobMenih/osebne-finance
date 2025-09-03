@@ -1,21 +1,30 @@
-import { Controller, Post, Body, Get, Param, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ParseUUIDPipe } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 
 @Controller('users')
 export class UsersController {
-    constructor(private usersService: UsersService) {}
+    constructor(private readonly usersService: UsersService) {}
 
     @Post()
-    create(@Body() dto: CreateUserDto) {
-        return this.usersService.create(dto);
+    async create(@Body() dto: CreateUserDto) {
+        const passwordHash = await bcrypt.hash(dto.password, 10);
+        return this.usersService.create({ email: dto.email, passwordHash });
     }
 
-    @UseGuards(JwtAuthGuard)
     @Get(':id')
-    findOne(@Param('id', ParseUUIDPipe) id: string) {
+    findOne(@Param('id') id: string) {
         return this.usersService.findOne(id);
+    }
+
+    @Patch(':id')
+    update() {
+        return { count: 0 };
+    }
+
+    @Delete(':id')
+    remove() {
+        return { count: 0 };
     }
 }

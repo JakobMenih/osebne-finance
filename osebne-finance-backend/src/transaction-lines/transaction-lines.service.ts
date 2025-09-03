@@ -1,55 +1,61 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionLineDto } from './dto/create-transaction-line.dto';
-import { UpdateTransactionLineDto } from './dto/update-transaction-line.dto';
 
 @Injectable()
 export class TransactionLinesService {
-    constructor(private prisma: PrismaService) {}
-
-    async findAll(transactionId: string, userId: string) {
-        return this.prisma.transactionLine.findMany({
-            where: { transactionId, transaction: { userId } }
-        });
-    }
-
-    async findOne(id: string, userId: string) {
-        return this.prisma.transactionLine.findFirstOrThrow({
-            where: { id, transaction: { userId } }
-        });
-    }
+    constructor(private readonly prisma: PrismaService) {}
 
     async create(userId: string, dto: CreateTransactionLineDto) {
-        const tx = await this.prisma.transaction.findFirst({
-            where: { id: dto.transactionId, userId }
+        const account = await this.prisma.account.findFirstOrThrow({
+            where: { id: dto.accountId, userId },
         });
-        if (!tx) throw new NotFoundException('Transaction not found');
+        await this.prisma.transaction.findFirstOrThrow({
+            where: { id: dto.transactionId, userId },
+        });
 
         return this.prisma.transactionLine.create({
             data: {
-                transactionId: dto.transactionId,
-                accountId: dto.accountId,
-                categoryId: dto.categoryId,
+                transaction: { connect: { id: dto.transactionId } },
+                account: { connect: { id: dto.accountId } },
+                category: dto.categoryId ? { connect: { id: dto.categoryId } } : undefined,
                 amount: dto.amount,
-                currency: dto.currency,
-                description: dto.description
-            }
+                currency: account.currency,
+                description: dto.description ?? undefined,
+            },
         });
     }
 
+    findManyByTransaction(userId: string, transactionId: string) {
+        return this.prisma.transactionLine.findMany({
+            where: { transactionId, transaction: { userId } },
+        });
+    }
 
-    async update(id: string, userId: string, dto: UpdateTransactionLineDto) {
-        const updated = await this.prisma.transactionLine.updateMany({
+    findAll(transactionId: string, userId: string) {
+        return this.prisma.transactionLine.findMany({
+            where: { transactionId, transaction: { userId } },
+        });
+    }
+
+    findOne(id: string, userId: string) {
+        return this.prisma.transactionLine.findFirst({
             where: { id, transaction: { userId } },
-            data: dto
         });
-        if (updated.count === 0) throw new NotFoundException(`Transaction line with id ${id} not found`);
-        return this.findOne(id, userId);
     }
 
-    remove(id: string, userId: string) {
-        return this.prisma.transactionLine.deleteMany({
-            where: { id, transaction: { userId } }
+    update(id: string, userId: string, data: Prisma.TransactionLineUpdateInput) {
+        return this.prisma.transactionLine.updateMany({
+            where: { id, transaction: { userId } },
+            data,
         });
+    }
+
+    async remove(userId: string, id: string) {
+        await this.prisma.transactionLine.findFirstOrThrow({
+            where: { id, transaction: { userId } },
+        });
+        return this.prisma.transactionLine.delete({ where: { id } });
     }
 }
