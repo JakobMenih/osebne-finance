@@ -1,48 +1,38 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateUploadDto } from './dto/create-upload.dto';
+import * as fs from 'fs';
 
 @Injectable()
 export class UploadsService {
     constructor(private readonly prisma: PrismaService) {}
 
-    create(userId: string, dto: CreateUploadDto) {
-        return this.prisma.upload.create({
-            data: {
-                user: { connect: { id: userId } },
-                source: dto?.source ?? null,
-                fileMetadata: dto?.fileMetadata ?? {},
-            },
-        });
+    create(userId: string, source: string | null, fileMetadata: any) {
+        return this.prisma.upload.create({ data: { userId, source, fileMetadata } });
     }
 
-    createFromFile(userId: string, file: Express.Multer.File, source = 'upload') {
-        const metadata = {
-            originalName: file.originalname,
-            mimetype: file.mimetype,
-            size: file.size,
-            path: (file as any).path,
-        } as any;
-
-        return this.prisma.upload.create({
-            data: {
-                user: { connect: { id: userId } },
-                source,
-                fileMetadata: metadata,
-            },
-        });
-    }
-
-    findAllByUser(userId: string) {
+    list(userId: string) {
         return this.prisma.upload.findMany({ where: { userId } });
     }
 
-    findOneForUser(id: string, userId: string) {
-        return this.prisma.upload.findFirst({ where: { id, userId } });
+    findById(id: string) {
+        return this.prisma.upload.findUnique({ where: { id } });
     }
 
-    async remove(id: string, userId: string) {
-        await this.findOneForUser(id, userId);
+    async remove(id: string) {
+        const up: any = await this.prisma.upload.findUnique({ where: { id } });
+        if (!up) return null;
+        const p: string | undefined = up?.fileMetadata?.path;
+        try {
+            if (p && fs.existsSync(p)) fs.unlinkSync(p);
+        } catch { }
         return this.prisma.upload.delete({ where: { id } });
+    }
+
+    linkToTransaction(uploadId: string, transactionId: string) {
+        return this.prisma.uploadLink.create({ data: { uploadId, transactionId } });
+    }
+
+    linkToLine(uploadId: string, lineId: string) {
+        return this.prisma.uploadLink.create({ data: { uploadId, lineId } });
     }
 }

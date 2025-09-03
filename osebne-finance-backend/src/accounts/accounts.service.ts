@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, Account } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma, Account } from '@prisma/client';
 
 @Injectable()
 export class AccountsService {
@@ -9,13 +9,7 @@ export class AccountsService {
     create(userId: string, data: Omit<Prisma.AccountCreateInput, 'user'>) {
         const { name, type, currency, metadata } = data;
         return this.prisma.account.create({
-            data: {
-                name,
-                type,
-                currency,
-                metadata: metadata ?? undefined,
-                user: { connect: { id: userId } },
-            },
+            data: { name, type, currency, metadata: (metadata as any) ?? undefined, user: { connect: { id: userId } } },
         });
     }
 
@@ -23,16 +17,16 @@ export class AccountsService {
         return this.prisma.account.findMany({ where: { userId } });
     }
 
-    findOneOrThrow(id: string, userId: string): Promise<Account> {
+    findOneOrThrow(id: string, userId: string) {
         return this.prisma.account.findFirstOrThrow({ where: { id, userId } });
     }
 
-    async update(id: string, userId: string, data: Prisma.AccountUpdateInput): Promise<Account> {
+    async update(id: string, userId: string, data: Prisma.AccountUpdateInput) {
         await this.findOneOrThrow(id, userId);
         return this.prisma.account.update({ where: { id }, data });
     }
 
-    async remove(id: string, userId: string): Promise<Account> {
+    async remove(id: string, userId: string) {
         await this.findOneOrThrow(id, userId);
         return this.prisma.account.delete({ where: { id } });
     }

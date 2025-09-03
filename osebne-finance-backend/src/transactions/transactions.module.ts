@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
 import { TransactionsController } from './transactions.controller';
+import { FxModule } from '../fx/fx.module';
 
 @Module({
-  providers: [TransactionsService],
-  controllers: [TransactionsController]
+    imports: [FxModule],
+    providers: [TransactionsService],
+    controllers: [TransactionsController],
 })
 export class TransactionsModule {}

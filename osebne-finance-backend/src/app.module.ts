@@ -1,32 +1,29 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
-import { AccountsModule } from './accounts/accounts.module';
 import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
+import { AccountsModule } from './accounts/accounts.module';
 import { CategoriesModule } from './categories/categories.module';
 import { TransactionsModule } from './transactions/transactions.module';
-import { TransactionLinesModule } from './transaction-lines/transaction-lines.module';
 import { BudgetsModule } from './budgets/budgets.module';
+import { AllocationsModule } from './allocations/allocations.module';
+import { FxModule } from './fx/fx.module';
 import { UploadsModule } from './uploads/uploads.module';
-import { AuditLogsModule } from './audit-logs/audit-logs.module';
-import { UsersModule } from './users/users.module';
-import {ConfigModule} from "@nestjs/config";
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    PrismaModule,
-    AccountsModule,
-    AuthModule,
-    CategoriesModule,
-    TransactionsModule,
-    TransactionLinesModule,
-    BudgetsModule,
-    UploadsModule,
-    AuditLogsModule,
-    UsersModule,],
-  controllers: [AppController],
-  providers: [AppService],
+    imports: [
+        ConfigModule.forRoot({ isGlobal: true }),
+        PrismaModule,
+        AuthModule,
+        UsersModule,
+        AccountsModule,
+        CategoriesModule,
+        TransactionsModule,
+        BudgetsModule,
+        AllocationsModule,
+        FxModule,
+        UploadsModule,
+    ],
 })
 export class AppModule {}

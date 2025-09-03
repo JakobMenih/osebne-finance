@@ -1,30 +1,74 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+    BadRequestException,
+    Body,
+    Controller,
+    ForbiddenException,
+    Get,
+    Param,
+    Patch,
+    Post,
+    Req,
+    UseGuards,
+} from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 
+@UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
-    constructor(private readonly usersService: UsersService) {}
-
-    @Post()
-    async create(@Body() dto: CreateUserDto) {
-        const passwordHash = await bcrypt.hash(dto.password, 10);
-        return this.usersService.create({ email: dto.email, passwordHash });
-    }
+    constructor(private readonly users: UsersService) {}
 
     @Get(':id')
-    findOne(@Param('id') id: string) {
-        return this.usersService.findOne(id);
+    async getUser(@Param('id') id: string, @Req() req: any) {
+        if (req.user.sub !== id) throw new ForbiddenException();
+        const user: any = await this.users.findById(id);
+        if (!user) throw new BadRequestException('Uporabnik ne obstaja');
+        return {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            settings: user.settings ?? {},
+            createdAt: user.createdAt,
+        };
     }
 
     @Patch(':id')
-    update() {
-        return { count: 0 };
+    async updateUser(
+        @Param('id') id: string,
+        @Req() req: any,
+        @Body() body: { firstName?: string; lastName?: string; settings?: any }
+    ) {
+        if (req.user.sub !== id) throw new ForbiddenException();
+        const user = await this.users.findById(id);
+        if (!user) throw new BadRequestException('Uporabnik ne obstaja');
+        return this.users.update(id, {
+            firstName: body.firstName,
+            lastName: body.lastName,
+            settings: body.settings,
+        });
     }
 
-    @Delete(':id')
-    remove() {
-        return { count: 0 };
+    @Post(':id/change-password')
+    async changePassword(
+        @Param('id') id: string,
+        @Req() req: any,
+        @Body() body: { oldPassword?: string; newPassword?: string }
+    ) {
+        if (req.user.sub !== id) throw new ForbiddenException();
+        const { oldPassword, newPassword } = body ?? {};
+        if (!oldPassword || !newPassword) {
+            throw new BadRequestException('Manjka staro ali novo geslo');
+        }
+
+        const user: any = await this.users.findById(id);
+        if (!user) throw new BadRequestException('Uporabnik ne obstaja');
+
+        const ok = await bcrypt.compare(oldPassword, user.passwordHash);
+        if (!ok) throw new ForbiddenException('Napačno staro geslo');
+
+        await this.users.update(id, { password: newPassword });
+        return { ok: true };
     }
 }

@@ -1,36 +1,20 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, Req, UseGuards, ParseUUIDPipe } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { BudgetsService } from './budgets.service';
-import { CreateBudgetDto } from './dto/create-budget.dto';
-import { UpdateBudgetDto } from './dto/update-budget.dto';
+import { Prisma } from '@prisma/client';
 
-@Controller('budgets')
 @UseGuards(JwtAuthGuard)
+@Controller('budgets')
 export class BudgetsController {
     constructor(private readonly svc: BudgetsService) {}
 
-    @Get()
-    getAll(@Req() req) {
-        return this.svc.findAll(req.user.sub);
-    }
-
-    @Get(':id')
-    getOne(@Req() req, @Param('id', ParseUUIDPipe) id: string) {
-        return this.svc.findOne(id, req.user.sub);
-    }
-
     @Post()
-    create(@Req() req, @Body() dto: CreateBudgetDto) {
-        return this.svc.create(req.user.sub, dto);
+    upsert(@Req() req, @Body() data: Prisma.BudgetUncheckedCreateInput) {
+        return this.svc.upsert(req.user.sub, data);
     }
 
-    @Patch(':id')
-    update(@Req() req, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateBudgetDto) {
-        return this.svc.update(id, req.user.sub, dto);
-    }
-
-    @Delete(':id')
-    remove(@Req() req, @Param('id', ParseUUIDPipe) id: string) {
-        return this.svc.remove(id, req.user.sub);
+    @Get()
+    list(@Req() req) {
+        return this.svc.list(req.user.sub);
     }
 }

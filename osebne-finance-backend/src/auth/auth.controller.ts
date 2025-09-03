@@ -1,34 +1,33 @@
-import { Body, Controller, HttpCode, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Post, UnauthorizedException, UseGuards, Req, HttpCode } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
-import * as bcrypt from 'bcrypt';
-import {LoginUserDto} from "../users/dto/login-user.dto";
-import {JwtAuthGuard} from "./jwt-auth.guard";
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
-    constructor(private readonly authService: AuthService, private readonly usersService: UsersService) {}
+    constructor(private readonly auth: AuthService, private readonly users: UsersService) {}
 
     @Post('register')
-    async register(@Body() dto: LoginUserDto) {
-        const passwordHash = await bcrypt.hash(dto.password, 10);
-        const user = await this.usersService.create({ email: dto.email, passwordHash });
-        return { id: user.id, email: user.email };
+    async register(@Body() body: { email?: string; password?: string; firstName?: string; lastName?: string }) {
+        const { email, password, firstName, lastName } = body ?? {};
+        if (!email || !password) throw new BadRequestException('email and password required');
+        const exists = await this.users.findByEmail(email);
+        if (exists) throw new BadRequestException('email already in use');
+        return this.users.create(email, password, firstName, lastName);
     }
 
     @Post('login')
-    async login(@Body() dto: LoginUserDto) {
-        const user = await this.authService.validateUser(dto.email, dto.password);
-        if (!user) {
-            throw new UnauthorizedException();
-        }
-        return this.authService.login(user);
+    @HttpCode(200)
+    async login(@Body() body: { email?: string; password?: string }) {
+        const user = await this.auth.validateUser(body?.email, body?.password);
+        if (!user) throw new UnauthorizedException();
+        return this.auth.login(user);
     }
 
     @UseGuards(JwtAuthGuard)
     @Post('profile')
     @HttpCode(200)
-    profile(@Req() req: any) {
+    async profile(@Req() req: any) {
         return { userId: req.user.sub, email: req.user.email };
     }
 }

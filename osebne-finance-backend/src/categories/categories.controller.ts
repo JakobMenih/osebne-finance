@@ -1,36 +1,30 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, Req, UseGuards, ParseUUIDPipe } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CategoriesService } from './categories.service';
-import { CreateCategoryDto } from './dto/create-category.dto';
-import { UpdateCategoryDto } from './dto/update-category.dto';
+import { Prisma } from '@prisma/client';
 
-@Controller('categories')
 @UseGuards(JwtAuthGuard)
+@Controller('categories')
 export class CategoriesController {
     constructor(private readonly svc: CategoriesService) {}
 
-    @Get()
-    getAll(@Req() req) {
-        return this.svc.findAll(req.user.sub);
-    }
-
-    @Get(':id')
-    getOne(@Req() req, @Param('id', ParseUUIDPipe) id: string) {
-        return this.svc.findOne(id, req.user.sub);
-    }
-
     @Post()
-    create(@Req() req, @Body() dto: CreateCategoryDto) {
-        return this.svc.create(req.user.sub, dto);
+    create(@Req() req, @Body() data: Prisma.CategoryCreateInput) {
+        return this.svc.create(req.user.sub, data);
+    }
+
+    @Get()
+    list(@Req() req) {
+        return this.svc.all(req.user.sub);
     }
 
     @Patch(':id')
-    update(@Req() req, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCategoryDto) {
-        return this.svc.update(id, req.user.sub, dto);
+    update(@Req() req, @Param('id') id: string, @Body() data: Prisma.CategoryUpdateInput) {
+        return this.svc.update(req.user.sub, id, data);
     }
 
     @Delete(':id')
-    remove(@Req() req, @Param('id', ParseUUIDPipe) id: string) {
-        return this.svc.remove(id, req.user.sub);
+    remove(@Req() req, @Param('id') id: string) {
+        return this.svc.remove(req.user.sub, id);
     }
 }

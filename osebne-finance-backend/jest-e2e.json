@@ -1,12 +1,15 @@
 {
-  "preset": "ts-jest",
   "testEnvironment": "node",
-  "rootDir": ".",
-  "testMatch": ["<rootDir>/test/e2e/**/*.e2e-spec.ts"],
+  "roots": ["<rootDir>/test"],
   "moduleFileExtensions": ["ts", "js", "json"],
-  "setupFilesAfterEnv": ["<rootDir>/test/e2e/jest.setup.ts"],
+  "testRegex": ".*\\.e2e-spec\\.ts$",
   "transform": {
-    "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": "tsconfig.json" }]
-  },
-  "maxWorkers": 1
-}
+    "^.+\\.ts$": [
+      "ts-jest",
+      {
+        "tsconfig": "tsconfig.json",
+        "isolatedModules": true
+      }
+    ]
+  }
+  }
