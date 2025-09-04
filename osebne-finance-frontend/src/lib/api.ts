@@ -1,73 +1,133 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const BASE = (import.meta as any).env?.VITE_API_URL?.replace(/\/+$/, '') || '';
 
-let token = localStorage.getItem('token') || '';
-export function setToken(t: string) { token = t; localStorage.setItem('token', t); }
-export function clearToken() { token = ''; localStorage.removeItem('token'); }
+type Options = {
+    method?: string;
+    body?: any;
+    headers?: Record<string, string>;
+    auth?: boolean;
+};
 
-async function request(path: string, init: RequestInit = {}) {
-    const headers = new Headers(init.headers || {});
-    if (!(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-    const res = await fetch(`${API_URL}${path}`, { ...init, headers });
-    const ct = res.headers.get('content-type') || '';
-    const data = ct.includes('application/json') ? await res.json() : await res.text();
-    if (!res.ok) throw new Error(typeof data === 'string' ? data : data?.message || 'Napaka');
-    return data;
+function getToken() {
+    return localStorage.getItem('token') || '';
 }
 
-export async function register(email: string, password: string) {
-    return request('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) });
-}
-export async function login(email: string, password: string) {
-    const r = await request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
-    setToken(r.access_token); return r;
-}
-export async function profile() { return request('/auth/profile', { method: 'POST' }); }
+export async function api(path: string, opts: Options = {}) {
+    const url = `${BASE}${path.startsWith('/') ? path : `/${path}`}`;
 
-export type Account = { id: string; name: string; type: string; currency: string };
-export type Category = { id: string; name: string; type: string };
-export type Transaction = { id: string; date: string; description?: string|null };
-export type TransactionLine = { id: string; transactionId: string; accountId: string; categoryId?: string|null; amount: number; currency: string; description?: string|null };
-export type Budget = { id: string; categoryId: string; periodStart: string; periodEnd: string; amount: number };
-export type Upload = { id: string; userId: string; source?: string|null; fileMetadata: any; createdAt: string };
-export type AuditLog = { id: string; action?: string; entity?: string; data?: any; createdAt: string };
+    const headers: Record<string, string> = { ...(opts.headers || {}) };
+    const usingFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
 
-export function getAccounts(): Promise<Account[]> { return request('/accounts'); }
-export function createAccount(p: {name: string; type: string; currency: string}) { return request('/accounts', { method: 'POST', body: JSON.stringify(p) }); }
-export function updateAccount(id: string, p: Partial<{name: string; type: string; currency: string}>) { return request(`/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(p) }); }
-export function deleteAccount(id: string) { return request(`/accounts/${id}`, { method: 'DELETE' }); }
+    if (!usingFormData) {
+        if (opts.body && typeof opts.body === 'object') {
+            headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+            opts.body = JSON.stringify(opts.body);
+        }
+    }
 
-export function getCategories(): Promise<Category[]> { return request('/categories'); }
-export function createCategory(p: {name: string; type: string; parentId?: string|null}) { return request('/categories', { method: 'POST', body: JSON.stringify(p) }); }
-export function updateCategory(id: string, p: Partial<{name: string; type: string; parentId?: string|null}>) { return request(`/categories/${id}`, { method: 'PATCH', body: JSON.stringify(p) }); }
-export function deleteCategory(id: string) { return request(`/categories/${id}`, { method: 'DELETE' }); }
+    if (opts.auth !== false) {
+        const t = getToken();
+        if (t) headers['Authorization'] = `Bearer ${t}`;
+    }
 
-export function getTransactions(): Promise<Transaction[]> { return request('/transactions'); }
-export function getTransaction(id: string): Promise<Transaction> { return request(`/transactions/${id}`); }
-export function createTransaction(p: {date: string; description?: string|null}) { return request('/transactions', { method: 'POST', body: JSON.stringify(p) }); }
-export function updateTransaction(id: string, p: Partial<{date: string; description?: string|null}>) { return request(`/transactions/${id}`, { method: 'PATCH', body: JSON.stringify(p) }); }
-export function deleteTransaction(id: string) { return request(`/transactions/${id}`, { method: 'DELETE' }); }
+    let res: Response;
+    try {
+        res = await fetch(url, {
+            method: opts.method || (opts.body ? 'POST' : 'GET'),
+            body: opts.body,
+            headers,
+            credentials: 'omit',
+        });
+    } catch {
+        throw new Error('Ni povezave do API (network/CORS). Preveri VITE_API_URL in HTTPS.');
+    }
 
-export function getLines(transactionId: string): Promise<TransactionLine[]> { return request(`/transaction-lines/${transactionId}`); }
-export function createLine(p: {transactionId: string; accountId: string; categoryId?: string|null; amount: number; description?: string|null}) { return request('/transaction-lines', { method: 'POST', body: JSON.stringify(p) }); }
-export function updateLine(id: string, p: Partial<{accountId: string; categoryId?: string|null; amount: number; description?: string|null}>) { return request(`/transaction-lines/${id}`, { method: 'PATCH', body: JSON.stringify(p) }); }
-export function deleteLine(id: string) { return request(`/transaction-lines/${id}`, { method: 'DELETE' }); }
+    const text = await res.text();
+    let payload: any = null;
+    try { payload = text ? JSON.parse(text) : null; } catch { payload = text; }
 
-export function getBudgets(): Promise<Budget[]> { return request('/budgets'); }
-export function createBudget(p: {categoryId: string; periodStart: string; periodEnd: string; amount: number}) { return request('/budgets', { method: 'POST', body: JSON.stringify(p) }); }
-export function updateBudget(id: string, p: Partial<{categoryId: string; periodStart: string; periodEnd: string; amount: number}>) { return request(`/budgets/${id}`, { method: 'PATCH', body: JSON.stringify(p) }); }
-export function deleteBudget(id: string) { return request(`/budgets/${id}`, { method: 'DELETE' }); }
-
-export function listUploads(): Promise<Upload[]> { return request('/uploads'); }
-export async function downloadUpload(id: string) {
-    const headers = new Headers(); if (token) headers.set('Authorization', `Bearer ${token}`);
-    const r = await fetch(`${API_URL}/uploads/${id}/download`, { headers });
-    if (!r.ok) throw new Error('Napaka pri prenosu'); return await r.blob();
-}
-export function deleteUpload(id: string) { return request(`/uploads/${id}`, { method: 'DELETE' }); }
-export async function uploadFile(file: File, source = 'upload') {
-    const fd = new FormData(); fd.append('file', file); fd.append('source', source);
-    return request('/uploads/file', { method: 'POST', body: fd });
+    if (!res.ok) {
+        const message =
+            (payload && (payload.message || payload.error || payload.detail)) ||
+            `Napaka ${res.status}`;
+        const e = new Error(String(message)) as any;
+        e.status = res.status;
+        e.payload = payload;
+        throw e;
+    }
+    return payload;
 }
 
-export function getAuditLogs(): Promise<AuditLog[]> { return request('/audit-logs'); }
+export const get = (p: string, h?: any) => api(p, { method: 'GET', headers: h });
+export const post = (p: string, b?: any, h?: any) => api(p, { method: 'POST', body: b, headers: h });
+export const patch = (p: string, b?: any, h?: any) => api(p, { method: 'PATCH', body: b, headers: h });
+export const del = (p: string, h?: any) => api(p, { method: 'DELETE', headers: h });
+
+export type AccountType = 'checking' | 'savings' | 'cash';
+export type CategoryType = 'expense' | 'income';
+
+export interface Account {
+    id: string; userId: string; name: string; type: AccountType; currency: string;
+    metadata?: any; createdAt: string;
+}
+export interface Category {
+    id: string; userId: string; name: string; type: CategoryType;
+    parentId?: string | null; metadata?: any; createdAt: string;
+}
+export interface Upload {
+    id: string; userId: string; source?: string;
+    fileMetadata?: { originalName?: string; mimetype?: string; size?: number };
+    createdAt: string;
+}
+export interface Transaction {
+    id: string; userId: string; date: string;
+    description?: string | null; metadata?: any; createdAt: string;
+}
+export interface TransactionLine {
+    id: string; transactionId: string; accountId: string;
+    categoryId?: string | null; amount: number; currency: string;
+    description?: string | null; createdAt: string;
+}
+
+export const register = (b: { email: string; password: string }) => post('/auth/register', b);
+export const login = (b: { email: string; password: string }) => post('/auth/login', b);
+export const profile = () => post('/auth/profile', {});
+
+export const getAccounts = (): Promise<Account[]> => get('/accounts');
+export const createAccount = (b: { name: string; type: AccountType; currency: string }) => post('/accounts', b);
+export const updateAccount = (id: string, b: { name?: string; type?: AccountType; currency?: string }) => patch(`/accounts/${id}`, b);
+export const deleteAccount = (id: string) => del(`/accounts/${id}`);
+
+export const getCategories = (): Promise<Category[]> => get('/categories');
+export const createCategory = (b: { name: string; type: CategoryType; parentId?: string | null }) => post('/categories', b);
+export const updateCategory = (id: string, b: { name?: string; type?: CategoryType; parentId?: string | null }) => patch(`/categories/${id}`, b);
+export const deleteCategory = (id: string) => del(`/categories/${id}`);
+
+export const getTransactions = (): Promise<Transaction[]> => get('/transactions');
+export const createTransaction = (b: { date: string; description?: string | null; metadata?: any }) => post('/transactions', b);
+export const getTransaction = (id: string): Promise<Transaction> => get(`/transactions/${id}`);
+export const deleteTransaction = (id: string) => del(`/transactions/${id}`);
+
+export const getLines = (transactionId: string): Promise<TransactionLine[]> => get(`/transactions/${transactionId}/lines`);
+export const createLine = (b: { transactionId: string; accountId: string; categoryId?: string; amount: number; currency: string; description?: string }) => post('/transactions/lines', b);
+export const deleteLine = (lineId: string) => del(`/transactions/lines/${lineId}`);
+
+export const listUploads = (): Promise<Upload[]> => get('/uploads');
+export const uploadFile = (file: File, source = 'upload'): Promise<Upload> => {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    fd.append('source', source);
+    return api('/uploads', { method: 'POST', body: fd });
+};
+export const deleteUpload = (id: string) => del(`/uploads/${id}`);
+export const downloadUpload = async (id: string): Promise<Blob> => {
+    const envBase = (import.meta as any).env?.VITE_API_URL;
+    const BASE = (envBase ? String(envBase) : 'http://localhost:3000').replace(/\/+$/, '');
+    const url = `${BASE}/uploads/${id}/download`;
+    const t = getToken();
+    const res = await fetch(url, { headers: t ? { Authorization: `Bearer ${t}` } : undefined });
+    if (!res.ok) throw new Error(`Napaka ${res.status}`);
+    return await res.blob();
+};
+
+export const getBudgets = () => get('/budgets');
+export const createBudget = (b: { categoryId: string; periodStart: string; periodEnd: string; amount: number; metadata?: any }) => post('/budgets', b);

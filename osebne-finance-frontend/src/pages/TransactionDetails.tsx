@@ -1,15 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Nav from '../components/Nav';
 import { useParams } from 'react-router-dom';
 import {
-    getTransaction,
-    getLines,
-    createLine,
-    deleteLine,
-    getAccounts,
-    getCategories,
+    getTransaction, getLines, createLine, deleteLine,
+    getAccounts, getCategories,
     type Transaction, type TransactionLine, type Account, type Category
 } from '../lib/api';
+import { fmtAmount } from '../lib/ui';
 
 export default function TransactionDetails() {
     const { id = '' } = useParams();
@@ -19,6 +16,8 @@ export default function TransactionDetails() {
     const [categories, setCategories] = useState<Category[]>([]);
     const [err, setErr] = useState('');
     const [form, setForm] = useState<{accountId:string; categoryId?:string; amount:number; description?:string}>({ accountId:'', categoryId:'', amount:0, description:'' });
+
+    const selectedAccount = useMemo(()=>accounts.find(a=>a.id===form.accountId)||null, [accounts, form.accountId]);
 
     async function load() {
         try {
@@ -30,8 +29,15 @@ export default function TransactionDetails() {
     useEffect(()=>{ load(); }, [id]);
 
     async function onAdd() {
-        if (!form.accountId || !form.amount) return;
-        await createLine({ transactionId: id, accountId: form.accountId, categoryId: form.categoryId || undefined, amount: Number(form.amount), description: form.description || undefined });
+        if (!form.accountId || !form.amount || !selectedAccount) return;
+        await createLine({
+            transactionId: id,
+            accountId: form.accountId,
+            categoryId: form.categoryId || undefined,
+            amount: Number(form.amount),
+            currency: selectedAccount.currency,
+            description: form.description || undefined
+        });
         setForm(s=>({ ...s, amount: 0, description:'' })); await load();
     }
     async function onDelete(lineId: string) { await deleteLine(lineId); await load(); }
@@ -64,7 +70,7 @@ export default function TransactionDetails() {
                         <tr key={l.id} style={{ borderTop:'1px solid #eee' }}>
                             <td>{accounts.find(a=>a.id===l.accountId)?.name || l.accountId}</td>
                             <td>{l.categoryId ? (categories.find(c=>c.id===l.categoryId)?.name || l.categoryId) : ''}</td>
-                            <td>{l.amount.toFixed(2)}</td>
+                            <td>{fmtAmount(l.amount)}</td>
                             <td>{l.currency}</td>
                             <td>{l.description || ''}</td>
                             <td style={{ textAlign:'right' }}>

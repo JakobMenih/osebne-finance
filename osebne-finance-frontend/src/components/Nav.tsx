@@ -1,22 +1,33 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { clearToken } from '../lib/api';
+import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { post } from '../lib/api';
 
 export default function Nav() {
-    const { pathname } = useLocation();
     const nav = useNavigate();
-    const A = ({to,label}:{to:string;label:string}) => <Link to={to} style={{ fontWeight: pathname.startsWith(to) ? 700 : 400 }}>{label}</Link>;
+    const [msg, setMsg] = useState('');
+
+    async function refreshFx() {
+        try {
+            await post('/fx', { base: 'EUR', quote: 'USD', rate: 1, rateDate: new Date().toISOString().slice(0,10), source: 'manual' });
+            setMsg('Tečaji osveženi (primer POST).');
+        } catch (e:any) { setMsg(e.message); }
+    }
+
+    function logout() { localStorage.removeItem('token'); nav('/login', {replace:true}); }
+
     return (
-        <div style={{ display:'flex', gap:12, alignItems:'center', padding:12, borderBottom:'1px solid #eee' }}>
-            <b>Finančnik</b>
-            <A to="/accounts" label="Računi" />
-            <A to="/categories" label="Kategorije" />
-            <A to="/transactions" label="Transakcije" />
-            <A to="/budgets" label="Proračuni" />
-            <A to="/uploads" label="Nalaganja" />
-            <A to="/audit-logs" label="Revizija" />
-            <div style={{ marginLeft:'auto' }}>
-                <button onClick={() => { clearToken(); nav('/login'); }}>Odjava</button>
-            </div>
+        <div style={{ display:'flex', gap:12, padding:12, borderBottom:'1px solid #333' }}>
+            <Link to="/accounts">Računi</Link>
+            <Link to="/categories">Kategorije</Link>
+            <Link to="/transactions">Transakcije</Link>
+            <Link to="/budgets">Proračuni</Link>
+            <Link to="/uploads">Datoteke</Link>
+            <Link to="/audit-logs">Logi</Link>
+            <span style={{ marginLeft:'auto' }}>
+        <button onClick={refreshFx}>Osveži tečaje</button>
+        <button onClick={logout} style={{ marginLeft:8 }}>Odjava</button>
+      </span>
+            {msg && <span style={{ color:'#8f8', marginLeft:8 }}>{msg}</span>}
         </div>
     );
 }

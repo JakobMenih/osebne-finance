@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import Nav from '../components/Nav';
-import {getCategories, createCategory, updateCategory, deleteCategory, type Category} from '../lib/api';
+import {getCategories, createCategory, updateCategory, deleteCategory, type Category, type CategoryType} from '../lib/api';
 
 export default function Categories() {
     const [items, setItems] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState('');
-    const [form, setForm] = useState({ name:'', type:'expense' });
+    const [form, setForm] = useState<{ name:string; type:CategoryType }>({ name:'', type:'expense' });
 
     async function load() {
         setLoading(true); setErr('');
@@ -20,10 +20,7 @@ export default function Categories() {
         await createCategory({ name: form.name, type: form.type });
         setForm({ name:'', type:'expense' }); await load();
     }
-    async function onUpdate(c: Category) {
-        await updateCategory(c.id, { name: c.name, type: c.type });
-        await load();
-    }
+    async function onUpdate(c: Category) { await updateCategory(c.id, { name: c.name, type: c.type as CategoryType }); await load(); }
     async function onDelete(id: string) { await deleteCategory(id); await load(); }
 
     return (
@@ -36,10 +33,9 @@ export default function Categories() {
 
                 <div style={{ display:'flex', gap:8, margin:'12px 0' }}>
                     <input placeholder="Ime" value={form.name} onChange={e=>setForm({...form, name:e.target.value})} />
-                    <select value={form.type} onChange={e=>setForm({...form, type:e.target.value})}>
+                    <select value={form.type} onChange={e=>setForm({...form, type:e.target.value as CategoryType})}>
                         <option value="expense">expense</option>
                         <option value="income">income</option>
-                        <option value="transfer">transfer</option>
                     </select>
                     <button onClick={onCreate}>Dodaj</button>
                 </div>
@@ -51,10 +47,9 @@ export default function Categories() {
                         <tr key={c.id} style={{ borderTop:'1px solid #eee' }}>
                             <td><input value={c.name} onChange={e=>setItems(prev=>prev.map(x=>x.id===c.id?{...x,name:e.target.value}:x))} /></td>
                             <td>
-                                <select value={c.type} onChange={e=>setItems(prev=>prev.map(x=>x.id===c.id?{...x,type:e.target.value}:x))}>
+                                <select value={c.type} onChange={e=>setItems(prev=>prev.map(x=>x.id===c.id?{...x,type:e.target.value as CategoryType}:x))}>
                                     <option value="expense">expense</option>
                                     <option value="income">income</option>
-                                    <option value="transfer">transfer</option>
                                 </select>
                             </td>
                             <td style={{ textAlign:'right' }}>

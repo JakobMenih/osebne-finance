@@ -7,10 +7,11 @@ import Transactions from './pages/Transactions';
 import TransactionDetails from './pages/TransactionDetails';
 import Budgets from './pages/Budgets';
 import AuditLogs from './pages/AuditLogs';
+import type {ReactElement} from "react";
 
-function isAuthed() { return !!localStorage.getItem('token'); }
-function Protected({ children }: { children: JSX.Element }) { return isAuthed() ? children : <Navigate to="/login" replace />; }
-
+function Protected({ children }: { children: ReactElement }) {
+    return localStorage.getItem('token') ? children : <Navigate to="/login" replace />;
+}
 export default function App() {
     return (
         <Routes>
