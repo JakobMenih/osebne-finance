@@ -1,66 +1,99 @@
 import { useEffect, useState } from 'react';
-import Nav from '../components/Nav';
-import { type Upload, listUploads, uploadFile, deleteUpload, downloadUpload } from '../lib/api';
+import { listUploads, uploadFile, downloadUpload, type Upload } from '../lib/api';
 
 export default function Uploads() {
-    const [file, setFile] = useState<File | null>(null);
     const [items, setItems] = useState<Upload[]>([]);
-    const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
+    const [file, setFile] = useState<File | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [err, setErr] = useState('');
 
     async function load() {
-        try { setItems(await listUploads()); } catch (e: any) { setErr(e.message); }
+        setLoading(true);
+        setErr('');
+        try {
+            const list = await listUploads();
+            setItems(list);
+        } catch (e: any) {
+            setErr(e.message);
+        } finally {
+            setLoading(false);
+        }
     }
+
     useEffect(() => { load(); }, []);
 
     async function onUpload() {
-        setMsg(''); setErr('');
-        if (!file) return setErr('Izberi datoteko');
+        if (!file) return;
+        setErr('');
         try {
-            const res = await uploadFile(file, 'upload');
-            setMsg(`Naloženo: ${res.id}`); setFile(null); await load();
-        } catch (e: any) { setErr(e.message); }
+            await uploadFile(file);
+            setFile(null);
+            // reload list after upload
+            await load();
+        } catch (e: any) {
+            setErr(e.message);
+        }
     }
 
-    async function onDelete(id: string) { await deleteUpload(id); await load(); }
-
-    async function onDownload(id: string, name = 'download.bin') {
-        const blob = await downloadUpload(id);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = name; a.click();
-        URL.revokeObjectURL(url);
+    async function onDownload(id: string, filename?: string) {
+        try {
+            const blob = await downloadUpload(id);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename || 'download';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (e: any) {
+            setErr(e.message);
+        }
     }
 
     return (
-        <>
-            <Nav />
-            <div style={{ padding: 16 }}>
-                <h2>Nalaganja</h2>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                    <input type="file" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] || null)} />
-                    <button onClick={onUpload} disabled={!file}>Naloži</button>
-                </div>
-                {msg && <div style={{ color: 'green' }}>{msg}</div>}
-                {err && <div style={{ color: 'crimson' }}>{err}</div>}
-
-                <table cellPadding={6} style={{ borderCollapse: 'collapse', width: '100%', marginTop: 12 }}>
-                    <thead><tr><th>ID</th><th>MIME</th><th>Velikost</th><th>Ime</th><th>Čas</th><th></th></tr></thead>
-                    <tbody>
-                    {items.map(u => (
-                        <tr key={u.id} style={{ borderTop: '1px solid #eee' }}>
-                            <td>{u.id}</td>
-                            <td>{u.fileMetadata?.mimetype || ''}</td>
-                            <td>{u.fileMetadata?.size || ''}</td>
-                            <td>{u.fileMetadata?.originalName || ''}</td>
-                            <td>{new Date(u.createdAt).toLocaleString()}</td>
-                            <td style={{ textAlign: 'right' }}>
-                                <button onClick={() => onDownload(u.id, u.fileMetadata?.originalName || 'datoteka.bin')}>Prenesi</button>
-                                <button onClick={() => onDelete(u.id)} style={{ marginLeft: 8 }}>Izbriši</button>
-                            </td>
-                        </tr>
-                    ))}
-                    </tbody>
-                </table>
+        <div className="p-4">
+            <h2 className="text-2xl font-bold mb-4">Datoteke</h2>
+            {loading && <div>Nalaganje ...</div>}
+            {err && <div className="text-red-600 mb-3">{err}</div>}
+            <div className="flex items-center gap-2 mb-4">
+                <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={e => setFile(e.target.files ? e.target.files[0] : null)}
+                />
+                <button
+                    onClick={onUpload}
+                    className="bg-blue-500 text-white px-3 py-1 rounded"
+                >
+                    Naloži
+                </button>
             </div>
-        </>
+            <table className="w-full border-collapse">
+                <thead>
+                <tr className="border-b border-gray-300">
+                    <th className="text-left px-2 py-1">Ime datoteke</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                {items.map(fileItem => (
+                    <tr key={fileItem.id} className="border-t border-gray-200">
+                        <td className="px-2 py-1">
+                            {fileItem.fileMetadata?.originalName || 'Datoteka'}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                            <button
+                                onClick={() => onDownload(fileItem.id, fileItem.fileMetadata?.originalName)}
+                                className="bg-green-500 text-white px-3 py-1 rounded"
+                            >
+                                Prenesi
+                            </button>
+                        </td>
+                    </tr>
+                ))}
+                </tbody>
+            </table>
+        </div>
     );
 }

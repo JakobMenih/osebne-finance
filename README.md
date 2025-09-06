@@ -1,1 +1,1 @@
-# osebne-finance
+# osebne-finance - Finančnik

@@ -43,7 +43,11 @@ export async function api(path: string, opts: Options = {}) {
 
     const text = await res.text();
     let payload: any = null;
-    try { payload = text ? JSON.parse(text) : null; } catch { payload = text; }
+    try {
+        payload = text ? JSON.parse(text) : null;
+    } catch {
+        payload = text;
+    }
 
     if (!res.ok) {
         const message =
@@ -66,31 +70,71 @@ export type AccountType = 'checking' | 'savings' | 'cash';
 export type CategoryType = 'expense' | 'income';
 
 export interface Account {
-    id: string; userId: string; name: string; type: AccountType; currency: string;
-    metadata?: any; createdAt: string;
+    id: string;
+    userId: string;
+    name: string;
+    type: AccountType;
+    currency: string;
+    metadata?: any;
+    createdAt: string;
 }
 export interface Category {
-    id: string; userId: string; name: string; type: CategoryType;
-    parentId?: string | null; metadata?: any; createdAt: string;
-}
-export interface Upload {
-    id: string; userId: string; source?: string;
-    fileMetadata?: { originalName?: string; mimetype?: string; size?: number };
+    id: string;
+    userId: string;
+    name: string;
+    type: CategoryType;
+    parentId?: string | null;
+    metadata?: any;
     createdAt: string;
 }
 export interface Transaction {
-    id: string; userId: string; date: string;
-    description?: string | null; metadata?: any; createdAt: string;
+    id: string;
+    userId: string;
+    date: string;
+    description?: string | null;
+    metadata?: any;
+    createdAt: string;
 }
 export interface TransactionLine {
-    id: string; transactionId: string; accountId: string;
-    categoryId?: string | null; amount: number; currency: string;
-    description?: string | null; createdAt: string;
+    id: string;
+    transactionId: string;
+    accountId: string;
+    categoryId?: string | null;
+    amount: number;
+    currency: string;
+    description?: string | null;
+    createdAt: string;
+}
+export interface Upload {
+    id: string;
+    userId: string;
+    source?: string;
+    fileMetadata?: { originalName?: string; mimetype?: string; size?: number };
+    createdAt: string;
+}
+export interface Budget {
+    id: string;
+    userId: string;
+    categoryId: string;
+    periodStart: string;
+    periodEnd: string;
+    amount: number;
+    metadata?: any;
+    createdAt: string;
+}
+export interface FxRate {
+    id: string;
+    base: string;
+    quote: string;
+    rate: number;
+    rateDate: string;
+    source?: string | null;
+    createdAt: string;
 }
 
-export const register = (b: { email: string; password: string }) => post('/auth/register', b);
-export const login = (b: { email: string; password: string }) => post('/auth/login', b);
-export const profile = () => post('/auth/profile', {});
+export const registerUser = (b: { email: string; password: string }) => post('/auth/register', b);
+export const loginUser = (b: { email: string; password: string }) => post('/auth/login', b);
+export const getProfile = () => post('/auth/profile', {});
 
 export const getAccounts = (): Promise<Account[]> => get('/accounts');
 export const createAccount = (b: { name: string; type: AccountType; currency: string }) => post('/accounts', b);
@@ -129,5 +173,9 @@ export const downloadUpload = async (id: string): Promise<Blob> => {
     return await res.blob();
 };
 
-export const getBudgets = () => get('/budgets');
+export const getBudgets = (): Promise<Budget[]> => get('/budgets');
 export const createBudget = (b: { categoryId: string; periodStart: string; periodEnd: string; amount: number; metadata?: any }) => post('/budgets', b);
+export const updateBudget = (id: string, b: { amount?: number; periodStart?: string; periodEnd?: string; metadata?: any }) => patch(`/budgets/${id}`, b);
+export const deleteBudget = (id: string) => del(`/budgets/${id}`);
+
+export const getFxRates = (): Promise<FxRate[]> => get('/fx');

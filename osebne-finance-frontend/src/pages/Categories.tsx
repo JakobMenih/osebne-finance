@@ -1,66 +1,135 @@
 import { useEffect, useState } from 'react';
-import Nav from '../components/Nav';
-import {getCategories, createCategory, updateCategory, deleteCategory, type Category, type CategoryType} from '../lib/api';
+import { getCategories, createCategory, updateCategory, deleteCategory, type Category, type CategoryType } from '../lib/api';
 
 export default function Categories() {
     const [items, setItems] = useState<Category[]>([]);
+    const [form, setForm] = useState<{ name: string; type: CategoryType }>({
+        name: '',
+        type: 'expense'
+    });
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState('');
-    const [form, setForm] = useState<{ name:string; type:CategoryType }>({ name:'', type:'expense' });
 
     async function load() {
-        setLoading(true); setErr('');
-        try { setItems(await getCategories()); } catch(e:any){ setErr(e.message); }
-        finally { setLoading(false); }
+        setLoading(true);
+        setErr('');
+        try {
+            const list = await getCategories();
+            setItems(list);
+        } catch (e: any) {
+            setErr(e.message);
+        } finally {
+            setLoading(false);
+        }
     }
-    useEffect(()=>{ load(); }, []);
+
+    useEffect(() => { load(); }, []);
 
     async function onCreate() {
         if (!form.name) return;
-        await createCategory({ name: form.name, type: form.type });
-        setForm({ name:'', type:'expense' }); await load();
+        setErr('');
+        try {
+            await createCategory({ name: form.name, type: form.type });
+            setForm({ name: '', type: 'expense' });
+            await load();
+        } catch (e: any) {
+            setErr(e.message);
+        }
     }
-    async function onUpdate(c: Category) { await updateCategory(c.id, { name: c.name, type: c.type as CategoryType }); await load(); }
-    async function onDelete(id: string) { await deleteCategory(id); await load(); }
+
+    async function onUpdate(cat: Category) {
+        setErr('');
+        try {
+            await updateCategory(cat.id, { name: cat.name, type: cat.type });
+            await load();
+        } catch (e: any) {
+            setErr(e.message);
+        }
+    }
+
+    async function onDelete(id: string) {
+        setErr('');
+        try {
+            await deleteCategory(id);
+            await load();
+        } catch (e: any) {
+            setErr(e.message);
+        }
+    }
 
     return (
-        <>
-            <Nav />
-            <div style={{ padding:16 }}>
-                <h2>Kategorije</h2>
-                {loading && <div>Nalaganje…</div>}
-                {err && <div style={{ color:'crimson' }}>{err}</div>}
-
-                <div style={{ display:'flex', gap:8, margin:'12px 0' }}>
-                    <input placeholder="Ime" value={form.name} onChange={e=>setForm({...form, name:e.target.value})} />
-                    <select value={form.type} onChange={e=>setForm({...form, type:e.target.value as CategoryType})}>
-                        <option value="expense">expense</option>
-                        <option value="income">income</option>
-                    </select>
-                    <button onClick={onCreate}>Dodaj</button>
-                </div>
-
-                <table cellPadding={6} style={{ borderCollapse:'collapse', width:'100%' }}>
-                    <thead><tr><th>Ime</th><th>Tip</th><th></th></tr></thead>
-                    <tbody>
-                    {items.map(c=>(
-                        <tr key={c.id} style={{ borderTop:'1px solid #eee' }}>
-                            <td><input value={c.name} onChange={e=>setItems(prev=>prev.map(x=>x.id===c.id?{...x,name:e.target.value}:x))} /></td>
-                            <td>
-                                <select value={c.type} onChange={e=>setItems(prev=>prev.map(x=>x.id===c.id?{...x,type:e.target.value as CategoryType}:x))}>
-                                    <option value="expense">expense</option>
-                                    <option value="income">income</option>
-                                </select>
-                            </td>
-                            <td style={{ textAlign:'right' }}>
-                                <button onClick={()=>onUpdate(c)}>Shrani</button>
-                                <button onClick={()=>onDelete(c.id)} style={{ marginLeft:8 }}>Izbriši</button>
-                            </td>
-                        </tr>
-                    ))}
-                    </tbody>
-                </table>
+        <div className="p-4">
+            <h2 className="text-2xl font-bold mb-4">Kategorije</h2>
+            {loading && <div>Nalaganje ...</div>}
+            {err && <div className="text-red-600 mb-3">{err}</div>}
+            <div className="flex gap-2 mb-4">
+                <input
+                    placeholder="Ime"
+                    value={form.name}
+                    onChange={e => setForm({ ...form, name: e.target.value })}
+                    className="border border-gray-300 rounded px-2 py-1"
+                />
+                <select
+                    value={form.type}
+                    onChange={e => setForm({ ...form, type: e.target.value as CategoryType })}
+                    className="border border-gray-300 rounded px-2 py-1"
+                >
+                    <option value="expense">expense</option>
+                    <option value="income">income</option>
+                </select>
+                <button
+                    onClick={onCreate}
+                    className="bg-blue-500 text-white px-3 py-1 rounded"
+                >
+                    Dodaj
+                </button>
             </div>
-        </>
+            <table className="w-full border-collapse">
+                <thead>
+                <tr className="border-b border-gray-300">
+                    <th className="text-left px-2 py-1">Ime</th>
+                    <th className="text-left px-2 py-1">Tip</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                {items.map(cat => (
+                    <tr key={cat.id} className="border-t border-gray-200">
+                        <td className="px-2 py-1">
+                            <input
+                                value={cat.name}
+                                onChange={e => setItems(prev => prev.map(x => x.id === cat.id ? { ...x, name: e.target.value } : x))}
+                                className="border border-gray-300 rounded px-2 py-1 w-full"
+                            />
+                        </td>
+                        <td className="px-2 py-1">
+                            <select
+                                value={cat.type}
+                                onChange={e => setItems(prev => prev.map(x => x.id === cat.id ? { ...x, type: e.target.value as CategoryType } : x))}
+                                className="border border-gray-300 rounded px-2 py-1"
+                            >
+                                <option value="expense">expense</option>
+                                <option value="income">income</option>
+                            </select>
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                            <button
+                                onClick={() => onUpdate(cat)}
+                                className="bg-blue-500 text-white px-3 py-1 rounded"
+                            >
+                                Shrani
+                            </button>
+                            <button
+                                onClick={() => onDelete(cat.id)}
+                                className="bg-red-500 text-white px-3 py-1 rounded ml-2"
+                            >
+                                Izbriši
+                            </button>
+                        </td>
+                    </tr>
+                ))}
+                </tbody>
+            </table>
+        </div>
     );
 }
