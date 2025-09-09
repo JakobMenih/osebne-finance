@@ -1,5 +1,5 @@
 import { INestApplication } from '@nestjs/common';
-import { makeApp, http } from './test-helpers';
+import makeApp, { http } from './test-helpers';
 
 describe('Auth', () => {
     let app: INestApplication;

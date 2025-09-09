@@ -13,13 +13,11 @@ export default function FxConverter() {
             try {
                 const fxList = await getFxRates();
                 setRates(fxList);
-                // Set default from and to if possible
                 if (fxList.length > 0) {
                     setFromCurrency(fxList[0].base);
                     setToCurrency(fxList[0].quote);
                 }
             } catch {
-                // ignore errors or handle as needed
             }
         };
         loadRates();
@@ -35,22 +33,46 @@ export default function FxConverter() {
             setResult(null);
             return;
         }
-        // find rate for selected pair
-        const rateObj = rates.find(r => r.base === fromCurrency && r.quote === toCurrency);
-        if (rateObj) {
-            setResult(+(amt * rateObj.rate).toFixed(4));
+        const baseCurrency = 'EUR';
+        if (fromCurrency === toCurrency) {
+            setResult(+(amt.toFixed(4)));
         } else {
-            // If no direct rate, try inverse or set null
-            const inverse = rates.find(r => r.base === toCurrency && r.quote === fromCurrency);
-            if (inverse) {
-                setResult(+(amt / inverse.rate).toFixed(4));
+            const direct = rates.find(r => r.base === fromCurrency && r.quote === toCurrency);
+            if (direct) {
+                setResult(+(amt * direct.rate).toFixed(4));
             } else {
-                setResult(null);
+                const inverse = rates.find(r => r.base === toCurrency && r.quote === fromCurrency);
+                if (inverse) {
+                    setResult(+(amt / inverse.rate).toFixed(4));
+                } else {
+                    let fromToBaseRate: number | null = null;
+                    let baseToTargetRate: number | null = null;
+                    if (fromCurrency === baseCurrency) {
+                        fromToBaseRate = 1;
+                    } else {
+                        const baseToFrom = rates.find(r => r.base === baseCurrency && r.quote === fromCurrency);
+                        if (baseToFrom) {
+                            fromToBaseRate = 1 / baseToFrom.rate;
+                        }
+                    }
+                    if (toCurrency === baseCurrency) {
+                        baseToTargetRate = 1;
+                    } else {
+                        const baseToTo = rates.find(r => r.base === baseCurrency && r.quote === toCurrency);
+                        if (baseToTo) {
+                            baseToTargetRate = baseToTo.rate;
+                        }
+                    }
+                    if (fromToBaseRate != null && baseToTargetRate != null) {
+                        setResult(+(amt * fromToBaseRate * baseToTargetRate).toFixed(4));
+                    } else {
+                        setResult(null);
+                    }
+                }
             }
         }
     }, [amount, fromCurrency, toCurrency, rates]);
 
-    // derive list of unique currencies from rates
     const currencyOptions = Array.from(new Set(rates.flatMap(r => [r.base, r.quote])));
 
     return (

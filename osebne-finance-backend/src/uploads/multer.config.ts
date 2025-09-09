@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { randomUUID } from 'crypto';
 
-const allow = (process.env.ALLOWED_MIME || 'image/png,image/jpeg,application/pdf').split(',');
+const allow = (process.env.ALLOWED_MIME || 'image/png,image/jpeg,application/pdf,text/plain').split(',');
 const maxMb = Number(process.env.MAX_UPLOAD_MB || 10);
 const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
 

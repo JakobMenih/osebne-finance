@@ -2,48 +2,69 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { PrismaExceptionFilter } from '../src/common/prisma-exception.filter';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as request from 'supertest';
 
-export async function bootstrap(): Promise<{ app: INestApplication }> {
-    process.env.BASE_CURRENCY = process.env.BASE_CURRENCY || 'EUR';
-    process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
-    process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://user:pass@localhost:5432/financnik_test?schema=osebne_finance';
-    process.env.UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads_test');
-    if (!fs.existsSync(process.env.UPLOAD_DIR)) fs.mkdirSync(process.env.UPLOAD_DIR, { recursive: true });
+export async function makeApp(): Promise<INestApplication> {
+    process.env.JWT_SECRET      = process.env.JWT_SECRET      || 'test-secret';
+    process.env.UPLOAD_DIR      = process.env.UPLOAD_DIR      || path.join(process.cwd(), 'uploads_test');
+    process.env.USE_DB_TRIGGERS = 'true';
+    process.env.DATABASE_URL    = process.env.DATABASE_URL    || 'postgresql://user:pass@localhost:5432/osebne_finance';
+
+    process.env.ALLOWED_MIME    = process.env.ALLOWED_MIME    || 'image/png,image/jpeg,application/pdf,text/plain';
+
+    if (!fs.existsSync(process.env.UPLOAD_DIR)) {
+        fs.mkdirSync(process.env.UPLOAD_DIR, { recursive: true });
+    }
 
     const app = await NestFactory.create(AppModule, { logger: false });
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalFilters(new PrismaExceptionFilter());
     await app.init();
 
     const prisma = app.get(PrismaService);
     await resetDb(prisma);
 
     await app.listen(0);
-    return { app };
+    return app;
 }
 
 export async function resetDb(prisma: PrismaService) {
     await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
-      osebne_finance.audit_logs,
-      osebne_finance.upload_links,
-      osebne_finance.uploads,
-      osebne_finance.transaction_lines,
-      osebne_finance.transactions,
-      osebne_finance.budgets,
-      osebne_finance.category_allocations,
-      osebne_finance.fx_rates,
-      osebne_finance.accounts,
-      osebne_finance.categories,
-      osebne_finance.users
+      expense_uploads,
+      income_uploads,
+      uploads,
+      transfers,
+      expenses,
+      incomes,
+      categories,
+      users
     RESTART IDENTITY CASCADE;
   `);
 }
 
-export async function authToken(app: INestApplication, email = 'test@example.com', password = 'Passw0rd!') {
-    await request(app.getHttpServer()).post('/auth/register').send({ email, password });
-    const login = await request(app.getHttpServer()).post('/auth/login').send({ email, password });
-    return login.body.access_token as string;
+export function http(app: INestApplication) {
+    const request = require('supertest');
+    return request(app.getHttpServer());
+}
+
+export async function registerAndLogin(api: any, email?: string, password?: string) {
+    email = email || `test_${Date.now()}@example.com`;
+    password = password || 'Passw0rd!';
+    await api.post('/auth/register').send({ email, password }).expect(201);
+    const login = await api.post('/auth/login').send({ email, password }).expect(200);
+    return { token: login.body.access_token as string, email, password };
+}
+
+export function withAuth(api: any, token: string) {
+    return {
+        get:    (url: string) => api.get(url).set('Authorization', `Bearer ${token}`),
+        post:   (url: string) => api.post(url).set('Authorization', `Bearer ${token}`),
+        put:    (url: string) => api.put(url).set('Authorization', `Bearer ${token}`),
+        patch:  (url: string) => api.patch(url).set('Authorization', `Bearer ${token}`),
+        delete: (url: string) => api.delete(url).set('Authorization', `Bearer ${token}`),
+        del:    (url: string) => api.delete(url).set('Authorization', `Bearer ${token}`),
+    };
 }

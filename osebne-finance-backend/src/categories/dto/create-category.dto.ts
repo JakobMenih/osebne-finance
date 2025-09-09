@@ -1,7 +1,16 @@
-import { IsIn, IsNotEmpty, IsString, Length, IsOptional } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateCategoryDto {
-    @IsString() @Length(1, 100) name!: string;
-    @IsIn(['income','expense']) type!: 'income'|'expense';
-    @IsOptional() parentId?: string;
+    @IsString()
+    @MaxLength(100)
+    name!: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(255)
+    description?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    isDefault?: boolean;
 }

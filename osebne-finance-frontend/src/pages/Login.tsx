@@ -23,8 +23,8 @@ export default function Login() {
     async function doRegister() {
         setErr(null); setLoading(true);
         try {
-            await post('/auth/register', { email, password }); // 201
-            await doLogin(); // auto-login -> redirect
+            await post('/auth/register', { email, password });
+            await doLogin();
         } catch (e: any) {
             setErr(e?.message || 'Napaka pri registraciji');
             setLoading(false);

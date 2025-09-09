@@ -1,7 +1,17 @@
-import { IsOptional, IsString, IsUUID, IsIn } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpdateCategoryDto {
-    @IsOptional() @IsString() name?: string;
-    @IsOptional() @IsIn(['expense', 'income', 'transfer']) type?: string;
-    @IsOptional() @IsUUID() parentId?: string | null;
+    @IsOptional()
+    @IsString()
+    @MaxLength(100)
+    name?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(255)
+    description?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    isDefault?: boolean;
 }

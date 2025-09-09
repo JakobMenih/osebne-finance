@@ -1,38 +1,50 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import * as fs from 'fs';
 
 @Injectable()
 export class UploadsService {
-    constructor(private readonly prisma: PrismaService) {}
+    constructor(private prisma: PrismaService) {}
 
-    create(userId: string, source: string | null, fileMetadata: any) {
-        return this.prisma.upload.create({ data: { userId, source, fileMetadata } });
+    create(
+        userId: number,
+        data: { fileName: string; filePath: string; fileType?: string; fileSize?: number; checksum?: string },
+    ) {
+        return this.prisma.upload.create({
+            data: {
+                userId,
+
+                fileName: data.fileName,
+                filePath: data.filePath,
+                fileType: data.fileType ?? null,
+                file_size: data.fileSize ?? null,
+                checksum: data.checksum ?? null,
+            },
+        });
     }
 
-    list(userId: string) {
+    list(userId: number) {
         return this.prisma.upload.findMany({ where: { userId } });
     }
 
-    findById(id: string) {
+    findById(id: number) {
         return this.prisma.upload.findUnique({ where: { id } });
     }
 
-    async remove(id: string) {
-        const up: any = await this.prisma.upload.findUnique({ where: { id } });
-        if (!up) return null;
-        const p: string | undefined = up?.fileMetadata?.path;
-        try {
-            if (p && fs.existsSync(p)) fs.unlinkSync(p);
-        } catch { }
+    async remove(id: number) {
+        await this.prisma.incomeUpload.deleteMany({ where: { upload_id: id } });
+        await this.prisma.expenseUpload.deleteMany({ where: { upload_id: id } });
         return this.prisma.upload.delete({ where: { id } });
     }
 
-    linkToTransaction(uploadId: string, transactionId: string) {
-        return this.prisma.uploadLink.create({ data: { uploadId, transactionId } });
+    linkToIncome(uploadId: number, incomeId: number) {
+        return this.prisma.incomeUpload.create({
+            data: { upload_id: uploadId, income_id: incomeId },
+        });
     }
 
-    linkToLine(uploadId: string, lineId: string) {
-        return this.prisma.uploadLink.create({ data: { uploadId, lineId } });
+    linkToExpense(uploadId: number, expenseId: number) {
+        return this.prisma.expenseUpload.create({
+            data: { upload_id: uploadId, expense_id: expenseId },
+        });
     }
 }

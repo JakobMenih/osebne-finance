@@ -1,69 +1,58 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Req, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+    Controller, Get, Post, Delete, Param, Body, Req, UseGuards, UseInterceptors, UploadedFile, BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import * as path from 'path';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UploadsService } from './uploads.service';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import * as path from 'path';
-import * as fs from 'fs';
-import { Response } from 'express';
+import {CreateUploadDto} from "./dto/create-upload.dto";
 
 @UseGuards(JwtAuthGuard)
 @Controller('uploads')
 export class UploadsController {
     constructor(private readonly svc: UploadsService) {}
 
-    private static storage = diskStorage({
-        destination: (_req, _f, cb) => cb(null, process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads')),
-        filename: (_req, file, cb) => cb(null, Date.now() + '_' + file.originalname),
-    });
-
-    // združljivo: POST /uploads
     @Post()
-    @UseInterceptors(FileInterceptor('file', { storage: UploadsController.storage, limits: { fileSize: Number(process.env.MAX_UPLOAD_BYTES || 20 * 1024 * 1024) } }))
-    uploadCompat(@Req() req, @UploadedFile() file: Express.Multer.File, @Body() body: { source?: string }) {
-        if (!file) throw new NotFoundException('Datoteka ni priložena');
-        const metadata = { originalname: file.originalname, mimetype: file.mimetype, size: file.size, filename: file.filename, path: file.path };
-        return this.svc.create(req.user.sub, body?.source || null, metadata);
-    }
+    @UseInterceptors(FileInterceptor('file'))
+    async create(@Req() req: any, @UploadedFile() file: Express.Multer.File, @Body() _body: CreateUploadDto) {
+        if (!file) throw new BadRequestException('Datoteka je obvezna (field name: "file")');
 
-    // tvoja pot: POST /uploads/file
-    @Post('file')
-    @UseInterceptors(FileInterceptor('file', { storage: UploadsController.storage, limits: { fileSize: Number(process.env.MAX_UPLOAD_BYTES || 20 * 1024 * 1024) } }))
-    uploadFile(@Req() req, @UploadedFile() file: Express.Multer.File, @Body() body: { source?: string }) {
-        if (!file) throw new NotFoundException('Datoteka ni priložena');
-        const metadata = { originalname: file.originalname, mimetype: file.mimetype, size: file.size, filename: file.filename, path: file.path };
-        return this.svc.create(req.user.sub, body?.source || null, metadata);
+        const userId = Number(req.user?.sub);
+        const f: any = file as any;
+        const filePath = f.path ?? (f.destination && f.filename ? path.join(f.destination, f.filename) : null);
+        if (!filePath) throw new BadRequestException('Ni mogoče določiti poti datoteke.');
+
+        return this.svc.create(userId, {
+            fileName: file.originalname,
+            filePath,
+            fileType: file.mimetype,
+            fileSize: file.size,
+        });
     }
 
     @Get()
-    list(@Req() req) {
-        return this.svc.list(req.user.sub);
+    list(@Req() req: any) {
+        const userId = Number(req.user?.sub);
+        return this.svc.list(userId);
     }
 
-    @Get(':id/download')
-    async download(@Param('id') id: string, @Res() res: Response) {
-        const up: any = await this.svc.findById(id);
-        if (!up) throw new NotFoundException();
-        const p: string | undefined = up?.fileMetadata?.path;
-        const name: string = up?.fileMetadata?.originalname || 'download';
-        if (!p || !fs.existsSync(p)) throw new NotFoundException('Datoteka ne obstaja');
-        return res.download(p, name);
+    @Get(':id')
+    get(@Param('id') id: string) {
+        return this.svc.findById(Number(id));
     }
 
     @Delete(':id')
-    async remove(@Param('id') id: string) {
-        const out = await this.svc.remove(id);
-        if (!out) throw new NotFoundException();
-        return out;
+    remove(@Param('id') id: string) {
+        return this.svc.remove(Number(id));
     }
 
-    @Post(':uploadId/link/transaction/:transactionId')
-    linkTx(@Param('uploadId') uploadId: string, @Param('transactionId') transactionId: string) {
-        return this.svc.linkToTransaction(uploadId, transactionId);
+    @Post(':uploadId/link/income/:incomeId')
+    linkIncome(@Param('uploadId') uploadId: string, @Param('incomeId') incomeId: string) {
+        return this.svc.linkToIncome(Number(uploadId), Number(incomeId));
     }
 
-    @Post(':uploadId/link/line/:lineId')
-    linkLine(@Param('uploadId') uploadId: string, @Param('lineId') lineId: string) {
-        return this.svc.linkToLine(uploadId, lineId);
+    @Post(':uploadId/link/expense/:expenseId')
+    linkExpense(@Param('uploadId') uploadId: string, @Param('expenseId') expenseId: string) {
+        return this.svc.linkToExpense(Number(uploadId), Number(expenseId));
     }
 }

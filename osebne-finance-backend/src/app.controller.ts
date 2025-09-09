@@ -8,4 +8,5 @@ export class AppController {
   @Get() getHello() {
     return 'Živjo iz Dockerja!';
   }
+    @Get('health') health(){ return { status: 'ok', time: new Date().toISOString() }; }
 }

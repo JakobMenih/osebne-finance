@@ -25,7 +25,6 @@ export default function Transactions() {
                 if (accList.length > 0) {
                     setForm(prev => ({ ...prev, accountId: accList[0].id }));
                 }
-                // Fetch transaction lines and calculate totals for each transaction
                 const totalsMap: Record<string, { amount: number; currency: string }> = {};
                 await Promise.all(txList.map(async (t) => {
                     const lines = await getLines(t.id);
@@ -67,7 +66,6 @@ export default function Transactions() {
             };
             await createTransaction(newTransaction);
             setForm({ description: '', date: '', amount: '', accountId: account.id });
-            // Reload transactions list
             const txList = await getTransactions();
             setItems(txList);
             const totalsMap: Record<string, { amount: number; currency: string }> = {};
@@ -90,7 +88,6 @@ export default function Transactions() {
     async function onDelete(id: string) {
         try {
             await deleteTransaction(id);
-            // Refresh list after deletion
             const txList = await getTransactions();
             setItems(txList);
             const totalsMap: Record<string, { amount: number; currency: string }> = {};

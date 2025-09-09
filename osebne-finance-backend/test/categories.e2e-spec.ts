@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
-import { makeApp, http, registerAndLogin, withAuth } from './test-helpers';
+import makeApp, { http, registerAndLogin, withAuth } from './test-helpers';
 
-describe('Categories E2E', () => {
+describe('Categories CRUD', () => {
     let app: INestApplication;
     let token: string;
 
@@ -11,22 +11,18 @@ describe('Categories E2E', () => {
         const session = await registerAndLogin(api);
         token = session.token;
     });
+    afterAll(async () => { await app.close(); });
 
-    afterAll(async () => {
-        await app.close();
-    });
-
-    it('GET /categories', async () => {
+    it('ustvari, prebere, posodobi, izbriše kategorijo', async () => {
         const api = withAuth(http(app), token);
-        const res = await api.get('/categories');
-        expect(res.status).toBe(200);
-        expect(Array.isArray(res.body)).toBe(true);
-    });
 
-    it('POST /categories', async () => {
-        const api = withAuth(http(app), token);
-        const res = await api.post('/categories').send({ name: 'Hrana', type: 'expense' });
-        expect(res.status).toBe(201);
-        expect(res.body).toHaveProperty('id');
+        const created = await api.post('/categories').send({ name: 'Tekoči račun' }).expect(201);
+        const id = created.body.id;
+
+        const list = await api.get('/categories').expect(200);
+        expect(list.body.some((c: any) => c.id === id)).toBe(true);
+
+        await api.put(`/categories/${id}`).send({ description: 'Glavni račun', isDefault: true }).expect(200);
+        await api.delete(`/categories/${id}`).expect(200);
     });
 });

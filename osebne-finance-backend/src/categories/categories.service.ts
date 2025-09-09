@@ -1,32 +1,42 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 
 @Injectable()
 export class CategoriesService {
-    constructor(private readonly prisma: PrismaService) {}
+    constructor(private prisma: PrismaService) {}
 
-    create(userId: string, data: Prisma.CategoryCreateInput) {
-        const { name, type, parent } = data;
+    list(userId: number) {
+        return this.prisma.category.findMany({
+            where: { userId },
+            orderBy: [{ name: 'asc' }],
+        });
+    }
+
+    create(userId: number, dto: CreateCategoryDto) {
         return this.prisma.category.create({
             data: {
-                name,
-                type,
-                user: { connect: { id: userId } },
-                parent: parent ? { connect: { id: (parent as any).connect.id } } : undefined,
+                userId,
+                name: dto.name,
+                description: dto.description ?? null,
+                isDefault: dto.isDefault ?? false,
             },
         });
     }
 
-    all(userId: string) {
-        return this.prisma.category.findMany({ where: { userId } });
+    update(userId: number, id: number, dto: UpdateCategoryDto) {
+        return this.prisma.category.update({
+            where: { id },
+            data: {
+                ...(dto.name !== undefined ? { name: dto.name } : {}),
+                ...(dto.description !== undefined ? { description: dto.description } : {}),
+                ...(dto.isDefault !== undefined ? { isDefault: dto.isDefault } : {}),
+            },
+        });
     }
 
-    update(userId: string, id: string, data: Prisma.CategoryUpdateInput) {
-        return this.prisma.category.update({ where: { id }, data, include: { children: true } });
-    }
-
-    remove(userId: string, id: string) {
+    remove(userId: number, id: number) {
         return this.prisma.category.delete({ where: { id } });
     }
 }

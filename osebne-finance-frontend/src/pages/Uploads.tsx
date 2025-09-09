@@ -28,7 +28,6 @@ export default function Uploads() {
         try {
             await uploadFile(file);
             setFile(null);
-            // reload list after upload
             await load();
         } catch (e: any) {
             setErr(e.message);

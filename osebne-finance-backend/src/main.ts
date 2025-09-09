@@ -1,24 +1,20 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import {DocumentBuilder, SwaggerModule} from "@nestjs/swagger";
+import { ValidationPipe } from '@nestjs/common';
+import { PrismaExceptionFilter } from './common/prisma-exception.filter';
 
 async function bootstrap() {
     const app = await NestFactory.create(AppModule);
+    app.enableCors();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalFilters(new PrismaExceptionFilter());
 
-    app.use(helmet());
-    const origins = (process.env.CORS_ORIGINS || '').split(',').filter(Boolean);
-    app.enableCors({ origin: origins.length ? origins : true, credentials: true });
+    const port = process.env.PORT ? Number(process.env.PORT) : 3000;
+    await app.listen(port);
 
-    app.use('/auth', rateLimit({ windowMs: 60_000, max: 100 }));
-
-    if (process.env.NODE_ENV !== 'production') {
-        const config = new DocumentBuilder().setTitle('Finančnik API').setVersion('1.0').addBearerAuth().build();
-        const doc = SwaggerModule.createDocument(app, config);
-        SwaggerModule.setup('docs', app, doc);
-    }
-
-    await app.listen(process.env.PORT ? Number(process.env.PORT) : 3000);
+    app.enableCors({
+        origin: process.env.FRONTEND_ORIGIN?.split(',') ?? ['http://localhost:5173'],
+        credentials: true,
+    });
 }
 bootstrap();
