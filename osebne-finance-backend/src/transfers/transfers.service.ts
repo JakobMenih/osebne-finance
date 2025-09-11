@@ -1,7 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-
-const useDbTriggers = () => process.env.USE_DB_TRIGGERS === 'true';
 
 @Injectable()
 export class TransfersService {
@@ -9,80 +7,44 @@ export class TransfersService {
 
     list(userId: number, from?: Date, to?: Date) {
         return this.prisma.transfer.findMany({
-            where: {
-                userId,
-                ...(from || to ? { transferDate: { gte: from, lte: to } } : {}),
-            },
+            where: { userId, transferDate: { gte: from, lte: to } },
             orderBy: { transferDate: 'desc' },
             include: { fromCategory: true, toCategory: true },
         });
     }
 
-    create(userId: number, data: {
-        fromCategoryId: number; toCategoryId: number; amount: string;
-        currency?: string; description?: string; transferDate?: Date;
-    }) {
-        return this.prisma.$transaction(async (tx) => {
-            const t = await tx.transfer.create({
-                data: {
-                    userId,
-                    fromCategoryId: data.fromCategoryId,
-                    toCategoryId: data.toCategoryId,
-                    amount: data.amount,
-                    currency: (data.currency ?? 'EUR').toUpperCase(),
-                    description: data.description,
-                    transferDate: data.transferDate ?? new Date(),
-                },
-            });
+    private async balance(userId: number, categoryId: number) {
+        const [inc, exp, tin, tout] = await this.prisma.$transaction([
+            this.prisma.income.aggregate({ where: { userId, categoryId }, _sum: { amount: true } }),
+            this.prisma.expense.aggregate({ where: { userId, categoryId }, _sum: { amount: true } }),
+            this.prisma.transfer.aggregate({ where: { userId, toCategoryId: categoryId }, _sum: { amount: true } }),
+            this.prisma.transfer.aggregate({ where: { userId, fromCategoryId: categoryId }, _sum: { amount: true } }),
+        ]);
+        const s = (x: any) => Number(x._sum.amount || 0);
+        return s(inc) - s(exp) + s(tin) - s(tout);
+    }
 
-            if (!useDbTriggers()) {
-                await tx.category.update({ where: { id: t.fromCategoryId }, data: { balance: { decrement: t.amount as any } } });
-                await tx.category.update({ where: { id: t.toCategoryId }, data: { balance: { increment: t.amount as any } } });
-            }
-
-            return t;
+    async create(userId: number, data: { fromCategoryId: number; toCategoryId: number; amount: number; description?: string | null; transferDate?: Date }) {
+        if (data.fromCategoryId === data.toCategoryId) throw new BadRequestException('Izbrani kategoriji morata biti različni.');
+        const bal = await this.balance(userId, data.fromCategoryId);
+        if (data.amount > bal) throw new BadRequestException('Na izvorni kategoriji ni dovolj sredstev za prenos.');
+        return this.prisma.transfer.create({
+            data: {
+                userId,
+                fromCategoryId: data.fromCategoryId,
+                toCategoryId: data.toCategoryId,
+                amount: data.amount,
+                description: data.description ?? null,
+                transferDate: data.transferDate ?? new Date(),
+            },
         });
     }
 
-    update(userId: number, id: number, data: {
-        fromCategoryId?: number; toCategoryId?: number; amount?: string;
-        currency?: string; description?: string; transferDate?: Date;
-    }) {
-        return this.prisma.$transaction(async (tx) => {
-            const before = await tx.transfer.findUnique({ where: { id } });
-            if (!before) throw new NotFoundException('Prenos ne obstaja');
-
-            const t = await tx.transfer.update({
-                where: { id },
-                data: {
-                    ...(data.fromCategoryId ? { fromCategoryId: data.fromCategoryId } : {}),
-                    ...(data.toCategoryId ? { toCategoryId: data.toCategoryId } : {}),
-                    ...(data.amount ? { amount: data.amount } : {}),
-                    ...(data.currency ? { currency: data.currency.toUpperCase() } : {}),
-                    ...(data.description !== undefined ? { description: data.description } : {}),
-                    ...(data.transferDate ? { transferDate: data.transferDate } : {}),
-                },
-            });
-
-            if (!useDbTriggers()) {
-                await tx.category.update({ where: { id: before.fromCategoryId }, data: { balance: { increment: before.amount as any } } });
-                await tx.category.update({ where: { id: before.toCategoryId }, data: { balance: { decrement: before.amount as any } } });
-                await tx.category.update({ where: { id: t.fromCategoryId }, data: { balance: { decrement: t.amount as any } } });
-                await tx.category.update({ where: { id: t.toCategoryId }, data: { balance: { increment: t.amount as any } } });
-            }
-
-            return t;
-        });
+    update(userId: number, id: number, data: { amount?: number; description?: string | null; transferDate?: Date }) {
+        return this.prisma.transfer.update({ where: { id, userId }, data });
     }
 
     remove(userId: number, id: number) {
-        return this.prisma.$transaction(async (tx) => {
-            const t = await tx.transfer.delete({ where: { id } });
-            if (!useDbTriggers()) {
-                await tx.category.update({ where: { id: t.fromCategoryId }, data: { balance: { increment: t.amount as any } } });
-                await tx.category.update({ where: { id: t.toCategoryId }, data: { balance: { decrement: t.amount as any } } });
-            }
-            return t;
-        });
+        return this.prisma.transfer.delete({ where: { id, userId } });
     }
 }

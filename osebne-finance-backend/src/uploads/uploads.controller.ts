@@ -1,58 +1,98 @@
 import {
-    Controller, Get, Post, Delete, Param, Body, Req, UseGuards, UseInterceptors, UploadedFile, BadRequestException,
+    Controller,
+    Get,
+    Post,
+    Param,
+    Delete,
+    UseGuards,
+    UseInterceptors,
+    UploadedFile,
+    Req,
+    Res,
+    NotFoundException,
+    ForbiddenException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import * as path from 'path';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UploadsService } from './uploads.service';
-import {CreateUploadDto} from "./dto/create-upload.dto";
+import { createReadStream, existsSync } from 'fs';
+import { join } from 'path';
+import { Response } from 'express';
+import { multerConfig } from './multer.config';
 
 @UseGuards(JwtAuthGuard)
 @Controller('uploads')
 export class UploadsController {
-    constructor(private readonly svc: UploadsService) {}
+    constructor(private readonly uploads: UploadsService) {}
 
     @Post()
-    @UseInterceptors(FileInterceptor('file'))
-    async create(@Req() req: any, @UploadedFile() file: Express.Multer.File, @Body() _body: CreateUploadDto) {
-        if (!file) throw new BadRequestException('Datoteka je obvezna (field name: "file")');
-
-        const userId = Number(req.user?.sub);
-        const f: any = file as any;
-        const filePath = f.path ?? (f.destination && f.filename ? path.join(f.destination, f.filename) : null);
-        if (!filePath) throw new BadRequestException('Ni mogoče določiti poti datoteke.');
-
-        return this.svc.create(userId, {
+    @UseInterceptors(FileInterceptor('file', multerConfig))
+    async create(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
+        const u = await this.uploads.create(req.user.sub, {
             fileName: file.originalname,
-            filePath,
+            filePath: file.path,
             fileType: file.mimetype,
             fileSize: file.size,
         });
+        return {
+            id: u.id,
+            file_name: u.fileName,
+            file_type: u.fileType,
+            file_size: u.file_size,
+        };
     }
 
     @Get()
-    list(@Req() req: any) {
-        const userId = Number(req.user?.sub);
-        return this.svc.list(userId);
+    async list(@Req() req: any) {
+        return this.uploads.list(req.user.sub);
     }
 
     @Get(':id')
-    get(@Param('id') id: string) {
-        return this.svc.findById(Number(id));
+    async meta(@Param('id') id: string, @Req() req: any) {
+        const u = await this.uploads.findById(Number(id));
+        if (!u) throw new NotFoundException();
+        if (u.userId !== req.user.sub) throw new ForbiddenException();
+        return u;
+    }
+
+    @Get(':id/file')
+    async file(@Param('id') id: string, @Req() req: any, @Res() res: Response) {
+        const u = await this.uploads.findById(Number(id));
+        if (!u) throw new NotFoundException();
+        if (u.userId !== req.user.sub) throw new ForbiddenException();
+
+        const abs = join(process.cwd(), u.filePath);
+        if (!existsSync(abs)) throw new NotFoundException();
+
+        res.setHeader('Content-Type', u.fileType ?? 'application/octet-stream');
+        res.setHeader('Content-Disposition', `inline; filename="${u.fileName}"`);
+        return createReadStream(abs).pipe(res);
     }
 
     @Delete(':id')
-    remove(@Param('id') id: string) {
-        return this.svc.remove(Number(id));
+    async remove(@Param('id') id: string, @Req() req: any) {
+        const u = await this.uploads.findById(Number(id));
+        if (!u) throw new NotFoundException();
+        if (u.userId !== req.user.sub) throw new ForbiddenException();
+        await this.uploads.remove(u.id);
+        return { ok: true };
     }
 
     @Post(':uploadId/link/income/:incomeId')
-    linkIncome(@Param('uploadId') uploadId: string, @Param('incomeId') incomeId: string) {
-        return this.svc.linkToIncome(Number(uploadId), Number(incomeId));
+    async linkIncome(@Param('uploadId') uploadId: string, @Param('incomeId') incomeId: string, @Req() req: any) {
+        const u = await this.uploads.findById(Number(uploadId));
+        if (!u) throw new NotFoundException();
+        if (u.userId !== req.user.sub) throw new ForbiddenException();
+        await this.uploads.linkToIncome(Number(uploadId), Number(incomeId));
+        return { ok: true };
     }
 
     @Post(':uploadId/link/expense/:expenseId')
-    linkExpense(@Param('uploadId') uploadId: string, @Param('expenseId') expenseId: string) {
-        return this.svc.linkToExpense(Number(uploadId), Number(expenseId));
+    async linkExpense(@Param('uploadId') uploadId: string, @Param('expenseId') expenseId: string, @Req() req: any) {
+        const u = await this.uploads.findById(Number(uploadId));
+        if (!u) throw new NotFoundException();
+        if (u.userId !== req.user.sub) throw new ForbiddenException();
+        await this.uploads.linkToExpense(Number(uploadId), Number(expenseId));
+        return { ok: true };
     }
 }

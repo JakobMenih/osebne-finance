@@ -1,7 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-
-const useDbTriggers = () => process.env.USE_DB_TRIGGERS === 'true';
 
 @Injectable()
 export class IncomesService {
@@ -20,27 +18,20 @@ export class IncomesService {
     }
 
     async getWithUploads(userId: number, id: number) {
-        const income = await this.prisma.income.findFirst({
-            where: { id, userId },
-            include: { category: true },
-        });
-        if (!income) throw new NotFoundException('Prihodek ne obstaja');
-
-        const links = await this.prisma.incomeUpload.findMany({
-            where: { income_id: id },
-            select: { upload_id: true },
-        });
-
+        const income = await this.prisma.income.findFirst({ where: { id, userId } });
+        if (!income) return null;
+        const links = await this.prisma.incomeUpload.findMany({ where: { income_id: id } });
         const uploads = links.length
-            ? await this.prisma.upload.findMany({ where: { id: { in: links.map((l) => l.upload_id) } } })
+            ? await this.prisma.upload.findMany({
+                where: { id: { in: links.map((l) => l.upload_id) }, userId },
+            })
             : [];
-
         return { ...income, uploads };
     }
 
-    create(
+    async create(
         userId: number,
-        data: { categoryId: number; amount: string; currency?: string; description?: string; transactionDate?: Date; uploadIds?: number[] },
+        data: { categoryId: number; amount: number; currency?: string; description?: string | null; transactionDate?: Date; uploadIds?: number[] },
     ) {
         return this.prisma.$transaction(async (tx) => {
             const income = await tx.income.create({
@@ -48,86 +39,55 @@ export class IncomesService {
                     userId,
                     categoryId: data.categoryId,
                     amount: data.amount,
-                    currency: (data.currency ?? 'EUR').toUpperCase(),
-                    description: data.description,
+                    currency: data.currency || 'EUR',
+                    description: data.description ?? null,
                     transactionDate: data.transactionDate ?? new Date(),
                 },
             });
-
-            if (!useDbTriggers()) {
-                await tx.category.update({
-                    where: { id: income.categoryId },
-                    data: { balance: { increment: income.amount as any } },
-                });
+            const validUploadIds = (data.uploadIds ?? []).length
+                ? (await tx.upload.findMany({ where: { id: { in: data.uploadIds! }, userId }, select: { id: true } })).map((u) => u.id)
+                : [];
+            for (const uploadId of validUploadIds) {
+                await tx.incomeUpload.create({ data: { income_id: income.id, upload_id: uploadId } });
             }
-
-            if (data.uploadIds?.length) {
-                await tx.incomeUpload.createMany({
-                    data: data.uploadIds.map((u) => ({ income_id: income.id, upload_id: u })),
-                    skipDuplicates: true,
-                });
-            }
-
             return income;
         });
     }
 
-    update(
+    async update(
         userId: number,
         id: number,
-        data: { categoryId?: number; amount?: string; currency?: string; description?: string; transactionDate?: Date; uploadIds?: number[] },
+        data: { amount?: number; currency?: string; description?: string | null; transactionDate?: Date; uploadIds?: number[] },
     ) {
         return this.prisma.$transaction(async (tx) => {
-            const before = await tx.income.findUnique({ where: { id } });
-            if (!before) throw new NotFoundException('Prihodek ne obstaja');
-
             const income = await tx.income.update({
-                where: { id },
+                where: { id, userId },
                 data: {
-                    ...(data.categoryId ? { categoryId: data.categoryId } : {}),
-                    ...(data.amount ? { amount: data.amount } : {}),
-                    ...(data.currency ? { currency: data.currency.toUpperCase() } : {}),
-                    ...(data.description !== undefined ? { description: data.description } : {}),
-                    ...(data.transactionDate ? { transactionDate: data.transactionDate } : {}),
+                    amount: data.amount,
+                    currency: data.currency,
+                    description: data.description ?? null,
+                    transactionDate: data.transactionDate,
                 },
             });
-
-            if (!useDbTriggers()) {
-                if (data.categoryId && data.categoryId !== before.categoryId) {
-                    await tx.category.update({ where: { id: before.categoryId }, data: { balance: { decrement: before.amount as any } } });
-                    await tx.category.update({ where: { id: income.categoryId }, data: { balance: { increment: income.amount as any } } });
-                } else if (data.amount) {
-                    const diff = Number(income.amount) - Number(before.amount);
-                    if (diff !== 0) {
-                        await tx.category.update({ where: { id: income.categoryId }, data: { balance: { increment: diff } } });
-                    }
-                }
-            }
-
             if (data.uploadIds) {
                 await tx.incomeUpload.deleteMany({ where: { income_id: id } });
-                if (data.uploadIds.length) {
-                    await tx.incomeUpload.createMany({
-                        data: data.uploadIds.map((u) => ({ income_id: id, upload_id: u })),
-                        skipDuplicates: true,
-                    });
+                const validUploadIds = data.uploadIds.length
+                    ? (await tx.upload.findMany({ where: { id: { in: data.uploadIds }, userId }, select: { id: true } })).map((u) => u.id)
+                    : [];
+                for (const uploadId of validUploadIds) {
+                    await tx.incomeUpload.create({ data: { income_id: id, upload_id: uploadId } });
                 }
             }
-
             return income;
         });
     }
 
     remove(userId: number, id: number) {
         return this.prisma.$transaction(async (tx) => {
-            const deleted = await tx.income.delete({ where: { id } });
-            if (!useDbTriggers()) {
-                await tx.category.update({
-                    where: { id: deleted.categoryId },
-                    data: { balance: { decrement: deleted.amount as any } },
-                });
-            }
-            return deleted;
+            const current = await tx.income.findFirst({ where: { id, userId } });
+            if (!current) return null;
+            await tx.incomeUpload.deleteMany({ where: { income_id: id } });
+            return tx.income.delete({ where: { id, userId } });
         });
     }
 }

@@ -1,135 +1,73 @@
-import { useEffect, useState } from 'react';
-import { getCategories, createCategory, updateCategory, deleteCategory, type Category, type CategoryType } from '../lib/api';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import api from "@/lib/api";
+import Amount from "@/components/Amount";
 
 export default function Categories() {
-    const [items, setItems] = useState<Category[]>([]);
-    const [form, setForm] = useState<{ name: string; type: CategoryType }>({
-        name: '',
-        type: 'expense'
+    const qc = useQueryClient();
+
+    const q = useQuery({
+        queryKey: ["categories"],
+        queryFn: async () => (await api.get("/categories")).data
     });
-    const [loading, setLoading] = useState(true);
-    const [err, setErr] = useState('');
 
-    async function load() {
-        setLoading(true);
-        setErr('');
-        try {
-            const list = await getCategories();
-            setItems(list);
-        } catch (e: any) {
-            setErr(e.message);
-        } finally {
-            setLoading(false);
-        }
-    }
+    const create = useMutation({
+        mutationFn: async (data: any) => (await api.post("/categories", data)).data,
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] })
+    });
 
-    useEffect(() => { load(); }, []);
+    const update = useMutation({
+        mutationFn: async ({ id, ...data }: any) => (await api.put(`/categories/${id}`, data)).data,
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] })
+    });
 
-    async function onCreate() {
-        if (!form.name) return;
-        setErr('');
-        try {
-            await createCategory({ name: form.name, type: form.type });
-            setForm({ name: '', type: 'expense' });
-            await load();
-        } catch (e: any) {
-            setErr(e.message);
-        }
-    }
+    const remove = useMutation({
+        mutationFn: async (id: number) => {
+            if (!confirm("Želite izbrisati kategorijo?")) return;
+            return (await api.delete(`/categories/${id}`)).data;
+        },
+        onError: (e: any) => alert(e?.response?.data?.message || "Brisanje kategorije ni uspelo"),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["categories"] })
+    });
 
-    async function onUpdate(cat: Category) {
-        setErr('');
-        try {
-            await updateCategory(cat.id, { name: cat.name, type: cat.type });
-            await load();
-        } catch (e: any) {
-            setErr(e.message);
-        }
-    }
-
-    async function onDelete(id: string) {
-        setErr('');
-        try {
-            await deleteCategory(id);
-            await load();
-        } catch (e: any) {
-            setErr(e.message);
-        }
+    function onCreate(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        const name = String(fd.get("name") || "").trim();
+        const description = String(fd.get("description") || "").trim();
+        if (!name) return;
+        create.mutate({ name, description });
+        e.currentTarget.reset();
     }
 
     return (
-        <div className="p-4">
-            <h2 className="text-2xl font-bold mb-4">Kategorije</h2>
-            {loading && <div>Nalaganje ...</div>}
-            {err && <div className="text-red-600 mb-3">{err}</div>}
-            <div className="flex gap-2 mb-4">
-                <input
-                    placeholder="Ime"
-                    value={form.name}
-                    onChange={e => setForm({ ...form, name: e.target.value })}
-                    className="border border-gray-300 rounded px-2 py-1"
-                />
-                <select
-                    value={form.type}
-                    onChange={e => setForm({ ...form, type: e.target.value as CategoryType })}
-                    className="border border-gray-300 rounded px-2 py-1"
-                >
-                    <option value="expense">expense</option>
-                    <option value="income">income</option>
-                </select>
-                <button
-                    onClick={onCreate}
-                    className="bg-blue-500 text-white px-3 py-1 rounded"
-                >
-                    Dodaj
-                </button>
+        <div className="page">
+            <h1>Kategorije</h1>
+
+            <form onSubmit={onCreate} className="toolbar">
+                <input name="name" placeholder="Ime kategorije" className="input" />
+                <input name="description" placeholder="Opis" className="input" />
+                <button className="btn">Ustvari</button>
+            </form>
+
+            <div className="list head four">
+                <div>Ime</div>
+                <div>Opis</div>
+                <div className="right">Stanje</div>
+                <div />
             </div>
-            <table className="w-full border-collapse">
-                <thead>
-                <tr className="border-b border-gray-300">
-                    <th className="text-left px-2 py-1">Ime</th>
-                    <th className="text-left px-2 py-1">Tip</th>
-                    <th></th>
-                </tr>
-                </thead>
-                <tbody>
-                {items.map(cat => (
-                    <tr key={cat.id} className="border-t border-gray-200">
-                        <td className="px-2 py-1">
-                            <input
-                                value={cat.name}
-                                onChange={e => setItems(prev => prev.map(x => x.id === cat.id ? { ...x, name: e.target.value } : x))}
-                                className="border border-gray-300 rounded px-2 py-1 w-full"
-                            />
-                        </td>
-                        <td className="px-2 py-1">
-                            <select
-                                value={cat.type}
-                                onChange={e => setItems(prev => prev.map(x => x.id === cat.id ? { ...x, type: e.target.value as CategoryType } : x))}
-                                className="border border-gray-300 rounded px-2 py-1"
-                            >
-                                <option value="expense">expense</option>
-                                <option value="income">income</option>
-                            </select>
-                        </td>
-                        <td className="px-2 py-1 text-right">
-                            <button
-                                onClick={() => onUpdate(cat)}
-                                className="bg-blue-500 text-white px-3 py-1 rounded"
-                            >
-                                Shrani
-                            </button>
-                            <button
-                                onClick={() => onDelete(cat.id)}
-                                className="bg-red-500 text-white px-3 py-1 rounded ml-2"
-                            >
-                                Izbriši
-                            </button>
-                        </td>
-                    </tr>
+
+            <div className="list-body">
+                {(q.data || []).map((c: any) => (
+                    <div key={c.id} className="list row four">
+                        <input defaultValue={c.name} onBlur={(e) => update.mutate({ id: c.id, name: e.currentTarget.value })} className="input" />
+                        <input defaultValue={c.description || ""} onBlur={(e) => update.mutate({ id: c.id, description: e.currentTarget.value })} className="input" />
+                        <div className="right"><Amount value={Number(c.balance || 0)} /></div>
+                        <div className="right">
+                            <button className="danger" onClick={() => remove.mutate(c.id)}>Izbriši</button>
+                        </div>
+                    </div>
                 ))}
-                </tbody>
-            </table>
+            </div>
         </div>
     );
 }

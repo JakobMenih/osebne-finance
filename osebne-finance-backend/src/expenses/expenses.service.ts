@@ -1,7 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-
-const useDbTriggers = () => process.env.USE_DB_TRIGGERS === 'true';
 
 @Injectable()
 export class ExpensesService {
@@ -19,115 +17,98 @@ export class ExpensesService {
         });
     }
 
+    private async balance(userId: number, categoryId: number) {
+        const [inc, exp, tin, tout] = await this.prisma.$transaction([
+            this.prisma.income.aggregate({ where: { userId, categoryId }, _sum: { amount: true } }),
+            this.prisma.expense.aggregate({ where: { userId, categoryId }, _sum: { amount: true } }),
+            this.prisma.transfer.aggregate({ where: { userId, toCategoryId: categoryId }, _sum: { amount: true } }),
+            this.prisma.transfer.aggregate({ where: { userId, fromCategoryId: categoryId }, _sum: { amount: true } }),
+        ]);
+        const s = (x: any) => Number(x._sum.amount || 0);
+        return s(inc) - s(exp) + s(tin) - s(tout);
+    }
+
     async getWithUploads(userId: number, id: number) {
-        const expense = await this.prisma.expense.findFirst({
-            where: { id, userId },
-            include: { category: true },
-        });
-        if (!expense) throw new NotFoundException('Odhodek ne obstaja');
-
-        const links = await this.prisma.expenseUpload.findMany({
-            where: { expense_id: id },
-            select: { upload_id: true },
-        });
-
+        const expense = await this.prisma.expense.findFirst({ where: { id, userId } });
+        if (!expense) return null;
+        const links = await this.prisma.expenseUpload.findMany({ where: { expense_id: id } });
         const uploads = links.length
-            ? await this.prisma.upload.findMany({ where: { id: { in: links.map((l) => l.upload_id) } } })
+            ? await this.prisma.upload.findMany({
+                where: { id: { in: links.map((l) => l.upload_id) }, userId },
+            })
             : [];
-
         return { ...expense, uploads };
     }
 
-    create(
+    async create(
         userId: number,
-        data: { categoryId: number; amount: string; currency?: string; description?: string; transactionDate?: Date; uploadIds?: number[] },
+        data: { categoryId: number; amount: number; currency?: string; description?: string | null; transactionDate?: Date; uploadIds?: number[] },
     ) {
+        if (data.amount < 0) throw new BadRequestException('Znesek mora biti pozitiven.');
+        const bal = await this.balance(userId, data.categoryId);
+        if (data.amount > bal) throw new BadRequestException('Na kategoriji ni dovolj sredstev za ta odhodek.');
         return this.prisma.$transaction(async (tx) => {
             const expense = await tx.expense.create({
                 data: {
                     userId,
                     categoryId: data.categoryId,
                     amount: data.amount,
-                    currency: (data.currency ?? 'EUR').toUpperCase(),
-                    description: data.description,
+                    currency: data.currency || 'EUR',
+                    description: data.description ?? null,
                     transactionDate: data.transactionDate ?? new Date(),
                 },
             });
-
-            if (!useDbTriggers()) {
-                await tx.category.update({
-                    where: { id: expense.categoryId },
-                    data: { balance: { decrement: expense.amount as any } },
-                });
+            const validUploadIds = (data.uploadIds ?? []).length
+                ? (await tx.upload.findMany({ where: { id: { in: data.uploadIds! }, userId }, select: { id: true } })).map((u) => u.id)
+                : [];
+            for (const uploadId of validUploadIds) {
+                await tx.expenseUpload.create({ data: { expense_id: expense.id, upload_id: uploadId } });
             }
-
-            if (data.uploadIds?.length) {
-                await tx.expenseUpload.createMany({
-                    data: data.uploadIds.map((u) => ({ expense_id: expense.id, upload_id: u })),
-                    skipDuplicates: true,
-                });
-            }
-
             return expense;
         });
     }
 
-    update(
+    async update(
         userId: number,
         id: number,
-        data: { categoryId?: number; amount?: string; currency?: string; description?: string; transactionDate?: Date; uploadIds?: number[] },
+        data: { amount?: number; currency?: string; description?: string | null; transactionDate?: Date; uploadIds?: number[] },
     ) {
         return this.prisma.$transaction(async (tx) => {
-            const before = await tx.expense.findUnique({ where: { id } });
-            if (!before) throw new NotFoundException('Odhodek ne obstaja');
-
+            const current = await tx.expense.findFirst({ where: { id, userId } });
+            if (!current) throw new BadRequestException('Odhodek ne obstaja.');
+            if (typeof data.amount === 'number') {
+                const bal = await this.balance(userId, current.categoryId);
+                const delta = data.amount - Number(current.amount);
+                if (delta > bal) throw new BadRequestException('Na kategoriji ni dovolj sredstev za spremembo odhodka.');
+            }
             const expense = await tx.expense.update({
-                where: { id },
+                where: { id, userId },
                 data: {
-                    ...(data.categoryId ? { categoryId: data.categoryId } : {}),
-                    ...(data.amount ? { amount: data.amount } : {}),
-                    ...(data.currency ? { currency: data.currency.toUpperCase() } : {}),
-                    ...(data.description !== undefined ? { description: data.description } : {}),
-                    ...(data.transactionDate ? { transactionDate: data.transactionDate } : {}),
+                    amount: data.amount,
+                    currency: data.currency,
+                    description: data.description ?? null,
+                    transactionDate: data.transactionDate,
                 },
             });
-
-            if (!useDbTriggers()) {
-                if (data.categoryId && data.categoryId !== before.categoryId) {
-                    await tx.category.update({ where: { id: before.categoryId }, data: { balance: { increment: before.amount as any } } });
-                    await tx.category.update({ where: { id: expense.categoryId }, data: { balance: { decrement: expense.amount as any } } });
-                } else if (data.amount) {
-                    const diff = Number(expense.amount) - Number(before.amount);
-                    if (diff !== 0) {
-                        await tx.category.update({ where: { id: expense.categoryId }, data: { balance: { decrement: diff } } });
-                    }
-                }
-            }
-
             if (data.uploadIds) {
                 await tx.expenseUpload.deleteMany({ where: { expense_id: id } });
-                if (data.uploadIds.length) {
-                    await tx.expenseUpload.createMany({
-                        data: data.uploadIds.map((u) => ({ expense_id: id, upload_id: u })),
-                        skipDuplicates: true,
-                    });
+                const validUploadIds = data.uploadIds.length
+                    ? (await tx.upload.findMany({ where: { id: { in: data.uploadIds }, userId }, select: { id: true } })).map((u) => u.id)
+                    : [];
+                for (const uploadId of validUploadIds) {
+                    await tx.expenseUpload.create({ data: { expense_id: id, upload_id: uploadId } });
                 }
             }
-
             return expense;
         });
     }
 
     remove(userId: number, id: number) {
         return this.prisma.$transaction(async (tx) => {
-            const deleted = await tx.expense.delete({ where: { id } });
-            if (!useDbTriggers()) {
-                await tx.category.update({
-                    where: { id: deleted.categoryId },
-                    data: { balance: { increment: deleted.amount as any } },
-                });
-            }
-            return deleted;
+            const current = await tx.expense.findFirst({ where: { id, userId } });
+            if (!current) throw new BadRequestException('Odhodek ne obstaja.');
+            await tx.expenseUpload.deleteMany({ where: { expense_id: id } });
+            return tx.expense.delete({ where: { id, userId } });
         });
     }
 }

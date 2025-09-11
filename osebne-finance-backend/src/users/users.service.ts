@@ -16,17 +16,33 @@ export class UsersService {
 
     async create(email: string, password: string, firstName = '', lastName = '') {
         const passwordHash = await bcrypt.hash(password, 10);
-        return this.prisma.user.create({
-            data: { email, passwordHash, firstName, lastName },
+
+        return this.prisma.$transaction(async (tx) => {
+            const user = await tx.user.create({
+                data: { email, passwordHash, firstName, lastName },
+            });
+
+            await tx.category.createMany({
+                data: [
+                    { userId: user.id, name: 'Tekoči račun', isDefault: true },
+                    { userId: user.id, name: 'Varčevalni račun', isDefault: true },
+                ],
+                skipDuplicates: true,
+            });
+
+            return user;
         });
     }
 
-    updateProfile(id: number, data: { firstName?: string; lastName?: string; defaultCurrency?: string; showAmounts?: boolean }) {
+    updateProfile(
+        id: number,
+        data: { firstName?: string; lastName?: string; defaultCurrency?: string; showAmounts?: boolean },
+    ) {
         return this.prisma.user.update({
             where: { id },
             data: {
                 ...(data.firstName !== undefined ? { firstName: data.firstName } : {}),
-                ...(data.lastName  !== undefined ? { lastName: data.lastName } : {}),
+                ...(data.lastName !== undefined ? { lastName: data.lastName } : {}),
                 ...(data.defaultCurrency ? { defaultCurrency: data.defaultCurrency.toUpperCase() } : {}),
                 ...(data.showAmounts !== undefined ? { showAmounts: data.showAmounts } : {}),
             },

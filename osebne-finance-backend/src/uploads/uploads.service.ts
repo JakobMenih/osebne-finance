@@ -12,7 +12,6 @@ export class UploadsService {
         return this.prisma.upload.create({
             data: {
                 userId,
-
                 fileName: data.fileName,
                 filePath: data.filePath,
                 fileType: data.fileType ?? null,

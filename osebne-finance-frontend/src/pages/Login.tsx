@@ -1,43 +1,63 @@
-import { useState } from 'react';
-import { post } from '../lib/api';
-import { useNavigate } from 'react-router-dom';
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import api, { setToken } from "@/lib/api";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/store/auth";
+import {normalizeUser} from "@/lib/user";
+
+
+const schema = z.object({
+    email: z.string().email("Vnesite veljaven e-poštni naslov"),
+    password: z.string().min(6, "Najmanj 6 znakov"),
+});
+type FormData = z.infer<typeof schema>;
 
 export default function Login() {
-    const nav = useNavigate();
-    const [email, setEmail] = useState('user@example.com');
-    const [password, setPassword] = useState('Passw0rd!');
-    const [loading, setLoading] = useState(false);
-    const [err, setErr] = useState<string | null>(null);
+    const navigate = useNavigate();
+    const [error, setError] = useState<string | null>(null);
+    const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({ resolver: zodResolver(schema) });
 
-    async function doLogin() {
-        setErr(null); setLoading(true);
+    async function onSubmit(data: FormData) {
+        setError(null);
         try {
-            const r = await post('/auth/login', { email, password });
-            localStorage.setItem('token', r.access_token);
-            nav('/accounts', { replace: true });
-        } catch (e: any) {
-            setErr(e?.message || 'Napaka pri prijavi');
-        } finally { setLoading(false); }
-    }
+            const r = await api.post("/auth/login", data);
+            const token: string | undefined = r.data?.token || r.data?.access_token || r.data?.accessToken;
+            if (!token) { setError("Neveljaven odgovor strežnika."); return; }
+            setToken(token);
 
-    async function doRegister() {
-        setErr(null); setLoading(true);
-        try {
-            await post('/auth/register', { email, password });
-            await doLogin();
+            const me = await api.post("/auth/profile");
+            const u = normalizeUser(me.data);
+            useAuth.getState().setAuth(u, token);
+
+            navigate("/");
         } catch (e: any) {
-            setErr(e?.message || 'Napaka pri registraciji');
-            setLoading(false);
+            setError(e?.response?.data?.message || "Napačen e-poštni naslov ali geslo.");
         }
     }
 
+
     return (
-        <div className="login-card">
-            {err && <div className="text-red-500 mb-2">{err}</div>}
-            <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="email" />
-            <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="geslo" />
-            <button disabled={loading} onClick={doLogin}>Prijava</button>
-            <button disabled={loading} onClick={doRegister}>Ustvari račun</button>
+        <div className="auth-wrap">
+            <form className="card stack" onSubmit={handleSubmit(onSubmit)}>
+                <h2>Prijava</h2>
+                {error && <div className="error">{error}</div>}
+                <div className="field">
+                    <label>E-pošta</label>
+                    <input type="email" placeholder="vnesi e-pošto" {...register("email")} />
+                    {errors.email && <div className="error">{errors.email.message}</div>}
+                </div>
+                <div className="field">
+                    <label>Geslo</label>
+                    <input type="password" placeholder="vnesi geslo" {...register("password")} />
+                    {errors.password && <div className="error">{errors.password.message}</div>}
+                </div>
+                <div className="actions">
+                    <button type="submit" disabled={isSubmitting}>Prijava</button>
+                    <Link to="/register" className="link-btn">Ustvari račun</Link>
+                </div>
+            </form>
         </div>
     );
 }

@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ExpensesService } from './expenses.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
 @Controller('expenses')
@@ -8,12 +8,7 @@ export class ExpensesController {
     constructor(private readonly svc: ExpensesService) {}
 
     @Get()
-    list(
-        @Req() req: any,
-        @Query('categoryId') categoryId?: string,
-        @Query('from') from?: string,
-        @Query('to') to?: string,
-    ) {
+    list(@Req() req: any, @Query('categoryId') categoryId?: string, @Query('from') from?: string, @Query('to') to?: string) {
         const userId = Number(req.user.sub);
         return this.svc.list(
             userId,
@@ -24,39 +19,22 @@ export class ExpensesController {
     }
 
     @Get(':id')
-    get(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
-        const userId = Number(req.user.sub);
-        return this.svc.getWithUploads(userId, id);
+    getOne(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
+        return this.svc.getWithUploads(Number(req.user.sub), id);
     }
 
     @Post()
-    create(
-        @Req() req: any,
-        @Body() dto: { categoryId: number; amount: string; currency?: string; description?: string; transactionDate?: string; uploadIds?: number[] },
-    ) {
-        const userId = Number(req.user.sub);
-        return this.svc.create(userId, {
-            ...dto,
-            transactionDate: dto.transactionDate ? new Date(dto.transactionDate) : undefined,
-        });
+    create(@Req() req: any, @Body() body: any) {
+        return this.svc.create(Number(req.user.sub), body);
     }
 
     @Put(':id')
-    update(
-        @Req() req: any,
-        @Param('id', ParseIntPipe) id: number,
-        @Body() dto: { categoryId?: number; amount?: string; currency?: string; description?: string; transactionDate?: string; uploadIds?: number[] },
-    ) {
-        const userId = Number(req.user.sub);
-        return this.svc.update(userId, id, {
-            ...dto,
-            transactionDate: dto.transactionDate ? new Date(dto.transactionDate) : undefined,
-        });
+    update(@Req() req: any, @Param('id', ParseIntPipe) id: number, @Body() body: any) {
+        return this.svc.update(Number(req.user.sub), id, body);
     }
 
     @Delete(':id')
     remove(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
-        const userId = Number(req.user.sub);
-        return this.svc.remove(userId, id);
+        return this.svc.remove(Number(req.user.sub), id);
     }
 }
