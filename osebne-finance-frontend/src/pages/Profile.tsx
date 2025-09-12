@@ -20,7 +20,7 @@ export default function Profile() {
 
     useEffect(() => {
         async function load() {
-            const me = await api.post("/auth/profile");
+            const me = await api.get("/auth/profile");
             setUser(normalizeUser(me.data));
         }
         if (!user?.email) load();
@@ -72,7 +72,7 @@ export default function Profile() {
                 <div className="field inline"><label>Pokaži zneske</label>
                     <select value={showAmounts ? "1" : "0"} onChange={(e) => setShowAmounts(e.target.value === "1")}><option value="1">Da</option><option value="0">Ne</option></select>
                 </div>
-                <div className="actions"><button onClick={saveProfile} disabled={saving}>Shrani</button>{msg && <span className="badge">{msg}</span>}</div>
+                <div className="actions"><button onClick={saveProfile} disabled={saving}>Shrani</button>{msg && <span className="success">{msg}</span>}</div>
             </div>
 
             <div className="card stack">
@@ -80,7 +80,7 @@ export default function Profile() {
                 <div className="field inline"><label>Trenutno geslo</label><input type="password" value={c1} onChange={(e) => setC1(e.target.value)} /></div>
                 <div className="field inline"><label>Novo geslo</label><input type="password" value={c2} onChange={(e) => setC2(e.target.value)} /></div>
                 <div className="field inline"><label>Potrdi novo geslo</label><input type="password" value={c3} onChange={(e) => setC3(e.target.value)} /></div>
-                <div className="actions"><button onClick={changePassword}>Spremeni geslo</button>{perr && <span className="badge">{perr}</span>}</div>
+                <div className="actions"><button onClick={changePassword}>Spremeni geslo</button>{perr && <span className="error">{perr}</span>}</div>
             </div>
         </div>
     );

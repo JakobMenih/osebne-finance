@@ -5,8 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import api, { setToken } from "@/lib/api";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/store/auth";
-import {normalizeUser} from "@/lib/user";
-
+import { normalizeUser } from "@/lib/user";
 
 const schema = z.object({
     email: z.string().email("Vnesite veljaven e-poštni naslov"),
@@ -26,17 +25,14 @@ export default function Login() {
             const token: string | undefined = r.data?.token || r.data?.access_token || r.data?.accessToken;
             if (!token) { setError("Neveljaven odgovor strežnika."); return; }
             setToken(token);
-
             const me = await api.post("/auth/profile");
             const u = normalizeUser(me.data);
             useAuth.getState().setAuth(u, token);
-
             navigate("/");
         } catch (e: any) {
             setError(e?.response?.data?.message || "Napačen e-poštni naslov ali geslo.");
         }
     }
-
 
     return (
         <div className="auth-wrap">
@@ -55,7 +51,7 @@ export default function Login() {
                 </div>
                 <div className="actions">
                     <button type="submit" disabled={isSubmitting}>Prijava</button>
-                    <Link to="/register" className="link-btn">Ustvari račun</Link>
+                    <Link to="/register" className="secondary">Ustvari račun</Link>
                 </div>
             </form>
         </div>

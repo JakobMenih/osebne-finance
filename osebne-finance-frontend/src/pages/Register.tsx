@@ -8,7 +8,7 @@ import { useState } from "react";
 const schema = z.object({
     firstName: z.string().min(1, "Vnesite ime"),
     lastName: z.string().min(1, "Vnesite priimek"),
-    email: z.string().email(),
+    email: z.string().email("Neveljaven e-poštni naslov"),
     password: z.string().min(6, "Najmanj 6 znakov"),
     confirmPassword: z.string().min(6, "Najmanj 6 znakov"),
 }).refine((d) => d.password === d.confirmPassword, { message: "Gesli se ne ujemata", path: ["confirmPassword"] });
@@ -39,7 +39,7 @@ export default function Register() {
                 {err && <div className="error">{err}</div>}
                 <div className="field"><label>Ime</label><input type="text" {...register("firstName")} placeholder="Ime" />{errors.firstName && <span className="error">{errors.firstName.message}</span>}</div>
                 <div className="field"><label>Priimek</label><input type="text" {...register("lastName")} placeholder="Priimek" />{errors.lastName && <span className="error">{errors.lastName.message}</span>}</div>
-                <div className="field"><label>Email</label><input type="email" {...register("email")} placeholder="email@domena.si" />{errors.email && <span className="error">{errors.email.message}</span>}</div>
+                <div className="field"><label>E-pošta</label><input type="email" {...register("email")} placeholder="email@domena.si" />{errors.email && <span className="error">{errors.email.message}</span>}</div>
                 <div className="field"><label>Geslo</label><input type="password" {...register("password")} placeholder="••••••••" />{errors.password && <span className="error">{errors.password.message}</span>}</div>
                 <div className="field"><label>Potrdi geslo</label><input type="password" {...register("confirmPassword")} placeholder="••••••••" />{errors.confirmPassword && <span className="error">{errors.confirmPassword.message}</span>}</div>
                 <div className="actions">

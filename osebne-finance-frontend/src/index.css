@@ -26,7 +26,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui
 .grid{display:grid;gap:16px}
 .grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
-.stack{display:grid;gap:18px}          /* VEČ RAZMIKA */
+.stack{display:grid;gap:18px}
 
 .field{display:grid;gap:6px}
 .field.inline{display:grid;grid-template-columns:160px 1fr;align-items:center;gap:10px}

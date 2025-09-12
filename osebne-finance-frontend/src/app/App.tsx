@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {useAuth} from "@/store/auth";
+import { useAuth } from "@/store/auth";
 import Navbar from "@/components/Navbar";
-import api from "@/lib/api";
-import {normalizeUser} from "@/lib/user";
+import api, { setToken } from "@/lib/api";
+import { normalizeUser } from "@/lib/user";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Protected from "@/components/Protected";
@@ -13,7 +13,6 @@ import Expenses from "@/pages/Expenses";
 import Transfers from "@/pages/Transfers";
 import Categories from "@/pages/Categories";
 import Profile from "@/pages/Profile";
-
 
 const qc = new QueryClient();
 
@@ -35,8 +34,9 @@ export default function App() {
     useEffect(() => {
         const token = localStorage.getItem("token");
         if (!token) { setBooted(true); return; }
-        api.post("/auth/profile")
-            .then((r: { data: any; }) => {
+        setToken(token);
+        api.get("/auth/profile")
+            .then((r: { data: any }) => {
                 const u = normalizeUser(r.data);
                 useAuth.getState().setAuth(u, token);
             })

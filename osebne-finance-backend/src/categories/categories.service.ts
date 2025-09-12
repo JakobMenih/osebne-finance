@@ -18,9 +18,7 @@ export class CategoriesService {
 
     async list(userId: number) {
         const cats = await this.prisma.category.findMany({ where: { userId }, orderBy: { name: 'asc' } });
-        const filled = await Promise.all(
-            cats.map(async (c) => ({ ...c, balance: await this.balance(userId, c.id) }))
-        );
+        const filled = await Promise.all(cats.map(async (c) => ({ ...c, balance: await this.balance(userId, c.id) })));
         return filled;
     }
 
@@ -33,10 +31,25 @@ export class CategoriesService {
     }
 
     async remove(userId: number, id: number) {
+        const [incomeCount, expenseCount, transferOutCount, transferInCount] = await this.prisma.$transaction([
+            this.prisma.income.count({ where: { userId, categoryId: id } }),
+            this.prisma.expense.count({ where: { userId, categoryId: id } }),
+            this.prisma.transfer.count({ where: { userId, fromCategoryId: id } }),
+            this.prisma.transfer.count({ where: { userId, toCategoryId: id } }),
+        ]);
+
+        const totalTransfers = transferOutCount + transferInCount;
+        if (incomeCount > 0 || expenseCount > 0 || totalTransfers > 0) {
+            throw new BadRequestException(
+                `Kategorije ni mogoče izbrisati, ker so nanjo vezane transakcije (prihodki: ${incomeCount}, odhodki: ${expenseCount}, prenosi: ${totalTransfers}). Najprej preknjižite ali izbrišite te postavke.`
+            );
+        }
+
         const bal = await this.balance(userId, id);
         if (Math.abs(bal) > 0.00001) {
             throw new BadRequestException('Kategorije ni mogoče izbrisati, dokler stanje ni 0,00.');
         }
+
         return this.prisma.category.delete({ where: { id, userId } });
     }
 }
