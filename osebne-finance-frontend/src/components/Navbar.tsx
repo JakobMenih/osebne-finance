@@ -3,7 +3,8 @@ import { useAuth } from "@/store/auth";
 
 export default function Navbar() {
     const { user, logout } = useAuth();
-    const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "";
+    const displayName = [user?.firstName, user?.lastName].
+    filter(Boolean).join(" ") || user?.email || "";
     return (
         <nav className="navbar">
             <NavLink to="/incomes">Prihodki</NavLink>

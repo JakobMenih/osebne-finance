@@ -80,7 +80,6 @@ export default function Categories() {
 
             <div className="card">
                 <div className="toolbar">
-                    <input className="input" placeholder="Filtriraj" value={filter} onChange={(e) => setFilter(e.target.value)} />
                     <input className="input" placeholder="Ime" value={name} onChange={(e) => setName(e.target.value)} />
                     <input className="input" placeholder="Opis" value={description} onChange={(e) => setDescription(e.target.value)} />
                     <div className="actions">
