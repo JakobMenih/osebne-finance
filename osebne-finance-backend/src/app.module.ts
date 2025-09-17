@@ -7,6 +7,7 @@ import {UploadsModule} from "./uploads/uploads.module";
 import {IncomesModule} from "./incomes/incomes.module";
 import {ExpensesModule} from "./expenses/expenses.module";
 import {TransfersModule} from "./transfers/transfers.module";
+import {HealthController} from "./health.controller";
 
 @Module({
     imports: [
@@ -18,6 +19,7 @@ import {TransfersModule} from "./transfers/transfers.module";
         IncomesModule,
         ExpensesModule,
         TransfersModule,
+        HealthController
     ],
 })
 export class AppModule {}
