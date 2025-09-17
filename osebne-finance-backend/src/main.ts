@@ -13,7 +13,7 @@ async function bootstrap() {
     await app.listen(port, '0.0.0.0');
 
     app.enableCors({
-        origin: process.env.CORS_ORIGIN?.split(',') ?? ['http://localhost:5173'],
+        origin: process.env.CORS_ORIGIN?.split(',') ?? [process.env.CORS_ORIGIN],
         credentials: true,
     });
 }
