@@ -19,7 +19,7 @@ import {HealthController} from "./health.controller";
         IncomesModule,
         ExpensesModule,
         TransfersModule,
-        HealthController
     ],
+    controllers: [HealthController],
 })
 export class AppModule {}
