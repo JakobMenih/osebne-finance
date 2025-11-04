@@ -2,14 +2,43 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Amount from "@/components/Amount";
 import api from "@/lib/api";
-import {formatDateSL, todayISO} from "@/lib/date";
+import { formatDateSL, todayISO } from "@/lib/date";
 import FileUpload from "@/components/FileUpload";
+import { useAuth } from "@/store/auth";
 
 type Category = { id: number; name: string };
 type Row = { id: number; categoryId: number; amount: number; description: string | null; transactionDate: string };
 
 type SortKey = "date" | "category" | "amount";
 type SortDir = "asc" | "desc";
+
+function HBarChart({ data, show, formatCurrency }: { data: { name: string; value: number }[]; show: boolean; formatCurrency: (v: number) => string }) {
+    const barH = 24;
+    const gap = 10;
+    const paddingX = 120;
+    const max = data.length ? Math.max(...data.map(d => d.value)) : 1;
+    const width = 600;
+    const height = data.length * (barH + gap) + 20;
+    return (
+        <div style={{ width: "100%" }}>
+            <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "auto" }}>
+                {data.map((d, i) => {
+                    const y = i * (barH + gap);
+                    const w = ((width - paddingX - 16) * d.value) / max;
+                    return (
+                        <g key={d.name}>
+                            <text x={8} y={y + barH * 0.7} fontSize="12" fill="#374151">{d.name}</text>
+                            <rect x={paddingX} y={y} width={w} height={barH} fill="#ef4444" rx="4" />
+                            <text x={paddingX + w + 6} y={y + barH * 0.7} fontSize="11" fill="#6b7280">
+                                {show ? formatCurrency(d.value) : "****"}
+                            </text>
+                        </g>
+                    );
+                })}
+            </svg>
+        </div>
+    );
+}
 
 export default function Expenses() {
     const qc = useQueryClient();
@@ -168,6 +197,33 @@ export default function Expenses() {
         setEditUploadIds(m => ({ ...m, [id]: ids }));
     }
 
+    const { user } = useAuth();
+    const show = user?.showAmounts ?? true;
+    const curr = user?.defaultCurrency || "EUR";
+
+    const expensesByCategory = useMemo(() => {
+        if (!list.data) return [];
+        const sums = new Map<number, number>();
+        for (const r of list.data) {
+            sums.set(r.categoryId, (sums.get(r.categoryId) || 0) + r.amount);
+        }
+        const result = Array.from(sums, ([catId, total]) => {
+            const name = categories.data?.find(c => c.id === catId)?.name || `Kategorija ${catId}`;
+            return { name, value: total };
+        });
+        result.sort((a, b) => b.value - a.value);
+        return result;
+    }, [list.data, categories.data]);
+
+    const formatCurrency = (val: number) => new Intl.NumberFormat(undefined, { style: "currency", currency: curr, maximumFractionDigits: 2 }).format(val);
+
+    const Chart = expensesByCategory.length > 0 ? (
+        <div className="card" style={{ flex: "0 1 420px", minWidth: 280 }}>
+            <h3>Odhodki po kategorijah</h3>
+            <HBarChart data={expensesByCategory} show={show} formatCurrency={formatCurrency} />
+        </div>
+    ) : null;
+
     return (
         <div className="container page">
             <h1>Odhodki</h1>
@@ -191,66 +247,78 @@ export default function Expenses() {
                 )}
             </div>
 
-            <div className="card">
-                <table className="table">
-                    <thead>
-                    <tr>
-                        <th>{head("Datum", "date")}</th>
-                        <th>{head("Kategorija", "category")}</th>
-                        <th>Opis</th>
-                        <th>Priponke</th>
-                        <th className="right">{head("Znesek", "amount")}</th>
-                        <th className="right">Akcije</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {rows.map(r => {
-                        const catName = categories.data?.find(c => c.id === r.categoryId)?.name || r.categoryId;
-                        const inEdit = editId === r.id;
-                        if (inEdit) {
-                            const [d, m, y] = formatDateSL(r.transactionDate).split("/");
-                            const iso = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-                            return (
-                                <tr key={r.id}>
-                                    <td><input className="input" type="date" defaultValue={iso} id={`d-e-${r.id}`} /></td>
-                                    <td>{catName}</td>
-                                    <td><input className="input" defaultValue={r.description || ""} id={`t-e-${r.id}`} /></td>
-                                    <td>
-                                        <FileUpload
-                                            value={editUploadIds[r.id] || []}
-                                            onChange={(ids) => setEditUploadIds(m => ({ ...m, [r.id]: ids }))}
-                                        />
-                                    </td>
-                                    <td className="right"><input className="input" defaultValue={String(r.amount)} id={`a-e-${r.id}`} /></td>
-                                    <td className="right row-actions">
-                                        <button onClick={() => update.mutate({
-                                            id: r.id,
-                                            amount: (document.getElementById(`a-e-${r.id}`) as HTMLInputElement).value,
-                                            description: (document.getElementById(`t-e-${r.id}`) as HTMLInputElement).value || null,
-                                            date: (document.getElementById(`d-e-${r.id}`) as HTMLInputElement).value,
-                                            uploadIds: editUploadIds[r.id] || []
-                                        })}>Shrani</button>
-                                        <button className="secondary" onClick={() => setEditId(null)}>Prekliči</button>
-                                    </td>
-                                </tr>
-                            );
-                        }
-                        return (
-                            <tr key={r.id}>
-                                <td>{formatDateSL(r.transactionDate)}</td>
-                                <td>{catName}</td>
-                                <td>{r.description || ""}</td>
-                                <td><button className="secondary" onClick={() => openAttachments(r.id)}>Prikaži</button></td>
-                                <td className="right"><Amount value={r.amount} /></td>
-                                <td className="right row-actions">
-                                    <button onClick={() => startEdit(r.id)}>Uredi</button>
-                                    <button className="danger" onClick={() => remove.mutate(r.id)}>Izbriši</button>
-                                </td>
+            <div className="with-aside-charts">
+                <div className="list-column">
+                    <div className="card">
+                        <table className="table">
+                            <thead>
+                            <tr>
+                                <th>{head("Datum", "date")}</th>
+                                <th>{head("Kategorija", "category")}</th>
+                                <th>Opis</th>
+                                <th>Priponke</th>
+                                <th className="right">{head("Znesek", "amount")}</th>
+                                <th className="right">Akcije</th>
                             </tr>
-                        );
-                    })}
-                    </tbody>
-                </table>
+                            </thead>
+                            <tbody>
+                            {rows.map(r => {
+                                const catName = categories.data?.find(c => c.id === r.categoryId)?.name || String(r.categoryId);
+                                const inEdit = editId === r.id;
+                                if (inEdit) {
+                                    const [d, m, y] = formatDateSL(r.transactionDate).split("/");
+                                    const iso = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+                                    return (
+                                        <tr key={r.id}>
+                                            <td><input className="input" type="date" defaultValue={iso} id={`d-e-${r.id}`} /></td>
+                                            <td>{catName}</td>
+                                            <td><input className="input" defaultValue={r.description || ""} id={`t-e-${r.id}`} /></td>
+                                            <td>
+                                                <FileUpload
+                                                    value={editUploadIds[r.id] || []}
+                                                    onChange={ids => setEditUploadIds(m => ({ ...m, [r.id]: ids }))}
+                                                />
+                                            </td>
+                                            <td className="right"><input className="input" defaultValue={String(r.amount)} id={`a-e-${r.id}`} /></td>
+                                            <td className="right row-actions">
+                                                <button onClick={() => update.mutate({
+                                                    id: r.id,
+                                                    amount: (document.getElementById(`a-e-${r.id}`) as HTMLInputElement).value,
+                                                    description: (document.getElementById(`t-e-${r.id}`) as HTMLInputElement).value || null,
+                                                    date: (document.getElementById(`d-e-${r.id}`) as HTMLInputElement).value,
+                                                    uploadIds: editUploadIds[r.id] || []
+                                                })}>Shrani</button>
+                                                <button className="secondary" onClick={() => setEditId(null)}>Prekliči</button>
+                                            </td>
+                                        </tr>
+                                    );
+                                }
+                                return (
+                                    <tr key={r.id}>
+                                        <td>{formatDateSL(r.transactionDate)}</td>
+                                        <td>{catName}</td>
+                                        <td>{r.description || ""}</td>
+                                        <td><button className="secondary" onClick={() => openAttachments(r.id)}>Prikaži</button></td>
+                                        <td className="right"><Amount value={r.amount} /></td>
+                                        <td className="right row-actions">
+                                            <button onClick={() => startEdit(r.id)}>Uredi</button>
+                                            <button className="danger" onClick={() => remove.mutate(r.id)}>Izbriši</button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <aside className="charts-aside">
+                    <div className="card chart-card">
+                        <div className="card-body">
+                            {Chart}
+                        </div>
+                    </div>
+                </aside>
             </div>
 
             {attachFor && (
