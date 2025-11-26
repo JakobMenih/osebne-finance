@@ -1,4 +1,4 @@
-:root{
+:root {
     --bg:#0f172a;
     --card:#111827;
     --muted:#94a3b8;
@@ -12,7 +12,7 @@ html,body,#root{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Arial,sans-serif}
 
 .layout{min-height:100%;display:flex;flex-direction:column}
-.container{width:100%;max-width:1280px;margin:0 auto;padding:24px}
+.container{width:100%;max-width:1480px;margin:0 auto;padding:20px}
 
 .navbar{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--bg)}
 .navbar a{color:var(--text);text-decoration:none;padding:8px 10px;border-radius:8px}
@@ -22,7 +22,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui
 .navbar button{background:#1f2937;color:var(--text);border:0;padding:8px 12px;border-radius:8px;cursor:pointer}
 .navbar button:hover{opacity:.9}
 
-.card{background:var(--card);padding:16px;border:1px solid var(--line);border-radius:14px}
+.card{background:var(--card);padding:16px;margin-right:10px;border:1px solid var(--line);border-radius:14px;margin:10px}
 .grid{display:grid;gap:16px}
 .grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -47,7 +47,7 @@ button.danger{background:var(--danger);color:#250b0b}
 .spread{display:flex;justify-content:space-between;gap:10px;align-items:center}
 
 .table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;table-layout:fixed}
-.table th,.table td{border-bottom:1px solid var(--line);padding:12px 14px;text-align:left;vertical-align:middle}
+.table th,.table td{border-bottom:1px solid var(--line);padding:16px 14px;text-align:left;vertical-align:middle}
 .table th{color:var(--muted);font-weight:500}
 .table tr:last-child td{border-bottom:0}
 .right{text-align:right}
@@ -68,18 +68,17 @@ button.danger{background:var(--danger);color:#250b0b}
 .with-aside-charts{
     display:grid;
     grid-template-columns:minmax(640px,1fr) 560px;
-    gap:24px;
     align-items:start;
 }
 .with-aside-charts .list-column{display:grid;gap:16px;grid-column:1}
 .with-aside-charts .charts-aside{grid-column:2;position:sticky;top:96px;display:grid;gap:16px}
 
-.chart-card{height:460px;padding:0}
+.chart-card{height:520px;padding:0}
 .chart-card .card-body{height:100%;padding:16px}
 
 .chart-card svg, .chart-card canvas{width:100% !important;height:100% !important;display:block}
-.chart-card svg text, .chart-card .recharts-text, .chart-card .echarts text{font-size:12.5px;fill:var(--muted)}
-.chart-card .tick text{font-size:12.5px}
+.chart-card svg text, .chart-card .recharts-text, .chart-card .echarts text{font-size:14px;fill:var(--muted)}
+.chart-card .tick text{font-size:14px}
 .chart-card .legend, .chart-card .recharts-legend-wrapper{font-size:12.5px}
 .chart-card .recharts-cartesian-grid line{stroke:#2a3547}
 .chart-card .recharts-tooltip-wrapper{filter:drop-shadow(0 6px 18px rgba(0,0,0,.35))}
@@ -87,15 +86,15 @@ button.danger{background:var(--danger);color:#250b0b}
 @media (max-width:1400px){
     .container{max-width:1160px}
     .with-aside-charts{grid-template-columns:minmax(560px,1fr) 520px}
-    .chart-card{height:420px}
+    .chart-card{height:480px}
 }
 @media (max-width:1100px){
     .container{max-width:980px}
     .with-aside-charts{grid-template-columns:1fr}
     .with-aside-charts .charts-aside{position:static}
-    .chart-card{height:360px}
+    .chart-card{height:400px}
 }
 @media (max-width:720px){
     .page .toolbar{grid-template-columns:1fr}
-    .chart-card{height:320px}
+    .chart-card{height:350px}
 }

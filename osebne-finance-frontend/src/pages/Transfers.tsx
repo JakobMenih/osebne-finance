@@ -5,178 +5,209 @@ import { formatDateSL, todayISO } from "@/lib/date";
 import Amount from "@/components/Amount";
 import { useAuth } from "@/store/auth";
 
-type Category = { id: number; name: string };
-type Row = { id: number; fromCategoryId: number; toCategoryId: number; amount: number; description: string | null; transferDate: string };
+type TransferRow = {
+    id: number;
+    fromCategoryId: number;
+    toCategoryId: number;
+    amount: number;
+    description: string | null;
+    transferDate: string;
+};
 
-type SortKey = "date" | "from" | "to" | "amount";
-type SortDir = "asc" | "desc";
+type Category = { id: number; name: string; description?: string | null; balance?: number | null };
 
-function VBarChart({ data, show, formatCurrency }: { data: { month: string; total: number }[]; show: boolean; formatCurrency: (v: number) => string }) {
-    const width = 600;
-    const height = 260;
-    const padding = 36;
-    const max = data.length ? Math.max(...data.map(d => d.total)) : 1;
-    const barW = data.length ? Math.max(12, (width - 2 * padding) / data.length - 8) : 20;
-    const scaleX = (i: number) => padding + i * (barW + 8);
-    const scaleY = (v: number) => {
-        const t = v / (max || 1);
-        return height - padding - t * (height - 2 * padding);
-    };
-    const monthLabel = (m: string) => {
-        const [yy, mm] = m.split("-");
-        return `${mm}/${yy}`;
-    };
-    const yTicks = 4;
+function parseAmount(input: string) {
+    const n = Number((input || "").replace(",", "."));
+    return Number.isFinite(n) ? n : 0;
+}
+
+function VBarChart({
+                       data,
+                       show,
+                       formatCurrency,
+                   }: {
+    data: { name: string; value: number }[];
+    show: boolean;
+    formatCurrency: (n: number) => string;
+}) {
+    const pad = 28;
+    const w = 520;
+    const h = 360;
+    const innerW = w - pad * 2;
+    const innerH = h - pad * 2;
+    const max = Math.max(1, ...data.map((d) => d.value));
+    const stepX = innerW / Math.max(1, data.length);
     return (
-        <div style={{ width: "100%" }}>
-            <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "auto" }}>
-                {Array.from({ length: yTicks + 1 }, (_, i) => {
-                    const t = (i / yTicks) * max;
-                    const y = scaleY(t);
-                    return (
-                        <g key={i}>
-                            <line x1={padding} y1={y} x2={width - padding} y2={y} stroke="#e5e7eb" strokeDasharray="3 3" />
-                            <text x={8} y={y + 4} fontSize="10" fill="#6b7280">{show ? formatCurrency(t) : ""}</text>
-                        </g>
-                    );
-                })}
-                <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#9ca3af" />
-                {data.map((d, i) => {
-                    const x = scaleX(i);
-                    const y = scaleY(d.total);
-                    const h = height - padding - y;
-                    return (
-                        <g key={d.month}>
-                            <rect x={x} y={y} width={barW} height={h} fill="#10b981" rx="4" />
-                            <text x={x + barW / 2} y={height - padding + 14} fontSize="10" fill="#6b7280" textAnchor="middle">
-                                {monthLabel(d.month)}
+        <svg viewBox={`0 0 ${w} ${h}`}>
+            {data.map((d, i) => {
+                const x = pad + i * stepX + stepX * 0.1;
+                const bw = stepX * 0.8;
+                const bh = (d.value / max) * innerH;
+                const y = pad + innerH - bh;
+                return (
+                    <g key={i}>
+                        <rect x={x} y={y} width={bw} height={bh} fill="#22c55e" />
+                        <text x={x + bw / 2} y={h - 6} textAnchor="middle">
+                            {d.name}
+                        </text>
+                        {show && (
+                            <text x={x + bw / 2} y={y - 6} textAnchor="middle">
+                                {formatCurrency(d.value)}
                             </text>
-                            <title>{show ? formatCurrency(d.total) : "****"}</title>
-                        </g>
-                    );
-                })}
-            </svg>
-        </div>
+                        )}
+                    </g>
+                );
+            })}
+            <g className="tick">
+                <line x1={pad} y1={pad + innerH} x2={pad + innerW} y2={pad + innerH} stroke="#2a3547" />
+                <line x1={pad} y1={pad} x2={pad} y2={pad + innerH} stroke="#2a3547" />
+            </g>
+        </svg>
     );
 }
 
 export default function Transfers() {
     const qc = useQueryClient();
-    const [form, setForm] = useState({ fromId: 0, toId: 0, amount: "", description: "", date: todayISO() });
+
+    const categories = useQuery<Category[]>({
+        queryKey: ["categories"],
+        queryFn: async () => (await api.get("/categories")).data,
+    });
+
+    const list = useQuery<TransferRow[]>({
+        queryKey: ["transfers"],
+        queryFn: async () => (await api.get("/transfers")).data,
+    });
+
+    const [form, setForm] = useState<{ fromId: number; toId: number; amount: string; description: string; date: string }>(
+        { fromId: 0, toId: 0, amount: "", description: "", date: todayISO() }
+    );
+
+    const canSave =
+        form.fromId > 0 && form.toId > 0 && form.fromId !== form.toId && parseAmount(form.amount) > 0 && !!form.date;
+
+    const create = useMutation({
+        mutationFn: async () => {
+            await api.post("/transfers", {
+                fromCategoryId: form.fromId,
+                toCategoryId: form.toId,
+                amount: parseAmount(form.amount),
+                description: form.description || null,
+                transferDate: new Date(form.date).toISOString(),
+            });
+        },
+        onSuccess: async () => {
+            setForm({ fromId: 0, toId: 0, amount: "", description: "", date: todayISO() });
+            await qc.invalidateQueries({ queryKey: ["transfers"] });
+            await qc.invalidateQueries({ queryKey: ["categories"] });
+        },
+    });
+
+    const remove = useMutation({
+        mutationFn: async (id: number) => {
+            await api.delete(`/transfers/${id}`);
+        },
+        onSuccess: async () => {
+            await qc.invalidateQueries({ queryKey: ["transfers"] });
+            await qc.invalidateQueries({ queryKey: ["categories"] });
+        },
+    });
+
     const [editId, setEditId] = useState<number | null>(null);
 
+    const update = useMutation({
+        mutationFn: async ({ id, amount, description, date }: { id: number; amount: string; description: string | null; date: string }) => {
+            await api.put(`/transfers/${id}`, {
+                amount: parseAmount(amount),
+                description: description || null,
+                transferDate: new Date(date).toISOString(),
+            });
+        },
+        onSuccess: async () => {
+            setEditId(null);
+            await qc.invalidateQueries({ queryKey: ["transfers"] });
+            await qc.invalidateQueries({ queryKey: ["categories"] });
+        },
+    });
+
+    type SortKey = "date" | "from" | "to" | "amount";
     const [sortKey, setSortKey] = useState<SortKey>("date");
-    const [sortDir, setSortDir] = useState<SortDir>("desc");
-
-    const categories = useQuery({ queryKey: ["categories"], queryFn: async () => (await api.get<Category[]>("/categories")).data });
-    const list = useQuery({ queryKey: ["transfers"], queryFn: async () => (await api.get<Row[]>("/transfers")).data });
-
-    const canSave = useMemo(() => Number(form.fromId) > 0 && Number(form.toId) > 0 && !!form.amount && form.fromId !== form.toId, [form]);
+    const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
     function head(label: string, key: SortKey) {
         const active = sortKey === key;
-        const arrow = active ? (sortDir === "asc" ? "▲" : "▼") : "⇅";
+        const arrow = active ? (sortDir === "asc" ? "▲" : "▼") : "";
         return (
-            <button className="secondary" onClick={() => {
-                if (sortKey !== key) { setSortKey(key); setSortDir(key === "date" ? "desc" : "asc"); }
-                else { setSortDir(sortDir === "asc" ? "desc" : "asc"); }
-            }} style={{ padding: "6px 10px" }}>
+            <button
+                className="secondary"
+                onClick={() => {
+                    if (active) setSortDir(sortDir === "asc" ? "desc" : "asc");
+                    else {
+                        setSortKey(key);
+                        setSortDir(key === "amount" ? "desc" : "asc");
+                    }
+                }}
+                style={{ padding: "6px 10px" }}
+            >
                 {label} {arrow}
             </button>
         );
     }
 
-    const nameOf = (id: number) => categories.data?.find(c => c.id === id)?.name?.toLowerCase() || "";
-
     const rows = useMemo(() => {
         const arr = [...(list.data || [])];
         arr.sort((a, b) => {
             if (sortKey === "date") {
-                const av = new Date(a.transferDate).getTime();
-                const bv = new Date(b.transferDate).getTime();
-                return sortDir === "asc" ? av - bv : bv - av;
+                return sortDir === "asc"
+                    ? a.transferDate.localeCompare(b.transferDate)
+                    : b.transferDate.localeCompare(a.transferDate);
             }
             if (sortKey === "from") {
-                const av = nameOf(a.fromCategoryId);
-                const bv = nameOf(b.fromCategoryId);
-                return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+                const an =
+                    categories.data?.find((c) => c.id === a.fromCategoryId)?.name?.toLowerCase() || "";
+                const bn =
+                    categories.data?.find((c) => c.id === b.fromCategoryId)?.name?.toLowerCase() || "";
+                return sortDir === "asc" ? an.localeCompare(bn) : bn.localeCompare(an);
             }
             if (sortKey === "to") {
-                const av = nameOf(a.toCategoryId);
-                const bv = nameOf(b.toCategoryId);
-                return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+                const an =
+                    categories.data?.find((c) => c.id === a.toCategoryId)?.name?.toLowerCase() || "";
+                const bn =
+                    categories.data?.find((c) => c.id === b.toCategoryId)?.name?.toLowerCase() || "";
+                return sortDir === "asc" ? an.localeCompare(bn) : bn.localeCompare(an);
             }
-            const av = Number(a.amount);
-            const bv = Number(b.amount);
-            return sortDir === "asc" ? av - bv : bv - av;
+            return sortDir === "asc" ? a.amount - b.amount : b.amount - a.amount;
         });
         return arr;
     }, [list.data, sortKey, sortDir, categories.data]);
 
-    const create = useMutation({
-        mutationFn: async () => {
-            const body = {
-                fromCategoryId: Number(form.fromId),
-                toCategoryId: Number(form.toId),
-                amount: Number(String(form.amount).replace(",", ".")),
-                description: form.description || null,
-                transferDate: new Date(form.date).toISOString()
-            };
-            return (await api.post("/transfers", body)).data;
-        },
-        onError: (e: any) => alert(e?.response?.data?.message || "Prenos ni uspel"),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ["transfers"] });
-            qc.invalidateQueries({ queryKey: ["categories"] });
-            setForm({ fromId: 0, toId: 0, amount: "", description: "", date: todayISO() });
-        }
-    });
-
-    const update = useMutation({
-        mutationFn: async ({ id, amount, description, date }: { id: number; amount: string; description: string | null; date: string }) => {
-            const body = { amount: Number(String(amount).replace(",", ".")), description, transferDate: new Date(date).toISOString() };
-            return (await api.put(`/transfers/${id}`, body)).data;
-        },
-        onError: (e: any) => alert(e?.response?.data?.message || "Urejanje prenosa ni uspelo"),
-        onSuccess: () => {
-            setEditId(null);
-            qc.invalidateQueries({ queryKey: ["transfers"] });
-            qc.invalidateQueries({ queryKey: ["categories"] });
-        }
-    });
-
-    const remove = useMutation({
-        mutationFn: async (id: number) => (await api.delete(`/transfers/${id}`)).data,
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ["transfers"] });
-            qc.invalidateQueries({ queryKey: ["categories"] });
-        }
-    });
-
     const { user } = useAuth();
     const show = user?.showAmounts ?? true;
     const curr = user?.defaultCurrency || "EUR";
+    const formatCurrency = (n: number) =>
+        new Intl.NumberFormat(undefined, { style: "currency", currency: curr, maximumFractionDigits: 2 }).format(n);
 
-    const transfersByMonth = useMemo(() => {
-        if (!list.data) return [];
-        const sums = new Map<string, number>();
-        for (const r of list.data) {
-            const month = new Date(r.transferDate).toISOString().slice(0, 7);
-            sums.set(month, (sums.get(month) || 0) + r.amount);
-        }
-        const result = Array.from(sums, ([month, total]) => ({ month, total }));
-        result.sort((a, b) => a.month.localeCompare(b.month));
-        return result;
+    const countData = useMemo(() => {
+        const map = new Map<string, number>();
+        (list.data || []).forEach((r) => {
+            const d = new Date(r.transferDate);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            map.set(key, (map.get(key) || 0) + 1);
+        });
+        const keys = Array.from(map.keys()).sort();
+        return keys.map((k) => {
+            const [y, m] = k.split("-");
+            return { name: `${m}/${y.slice(-2)}`, value: map.get(k) || 0 };
+        });
     }, [list.data]);
 
-    const formatCurrency = (val: number) => new Intl.NumberFormat(undefined, { style: "currency", currency: curr, maximumFractionDigits: 2 }).format(val);
-
-    const Chart = transfersByMonth.length > 0 ? (
-        <div className="card" style={{ flex: "0 1 420px", minWidth: 280 }}>
-            <h3>Trend prenosov</h3>
-            <VBarChart data={transfersByMonth} show={show} formatCurrency={formatCurrency} />
-        </div>
-    ) : null;
+    const Chart =
+        countData.length > 0 ? (
+            <div className="card" style={{ flex: "0 1 500px", minWidth: 320 }}>
+                <h3>Količina prenosov po mesecih</h3>
+                <VBarChart data={countData} show={show} formatCurrency={(n) => n.toString()} />
+            </div>
+        ) : null;
 
     return (
         <div className="container page">
@@ -184,18 +215,51 @@ export default function Transfers() {
 
             <div className="card">
                 <div className="toolbar">
-                    <select className="input" value={form.fromId} onChange={e => setForm({ ...form, fromId: Number(e.target.value) })}>
+                    <select
+                        className="input"
+                        value={form.fromId}
+                        onChange={(e) => setForm({ ...form, fromId: Number(e.target.value) })}
+                    >
                         <option value={0}>Iz kategorije</option>
-                        {(categories.data || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        {(categories.data || []).map((c) => (
+                            <option key={c.id} value={c.id}>
+                                {c.name}
+                            </option>
+                        ))}
                     </select>
-                    <select className="input" value={form.toId} onChange={e => setForm({ ...form, toId: Number(e.target.value) })}>
+                    <select
+                        className="input"
+                        value={form.toId}
+                        onChange={(e) => setForm({ ...form, toId: Number(e.target.value) })}
+                    >
                         <option value={0}>V kategorijo</option>
-                        {(categories.data || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        {(categories.data || []).map((c) => (
+                            <option key={c.id} value={c.id}>
+                                {c.name}
+                            </option>
+                        ))}
                     </select>
-                    <input className="input" placeholder="Znesek" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
-                    <input className="input" placeholder="Opis" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-                    <input className="input" type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
-                    <button disabled={!canSave} onClick={() => create.mutate()}>Prenesi</button>
+                    <input
+                        className="input"
+                        placeholder="Znesek"
+                        value={form.amount}
+                        onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                    />
+                    <input
+                        className="input"
+                        placeholder="Opis"
+                        value={form.description}
+                        onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    />
+                    <input
+                        className="input"
+                        type="date"
+                        value={form.date}
+                        onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    />
+                    <button disabled={!canSave} onClick={() => create.mutate()}>
+                        Prenesi
+                    </button>
                 </div>
             </div>
 
@@ -214,28 +278,65 @@ export default function Transfers() {
                             </tr>
                             </thead>
                             <tbody>
-                            {rows.map(r => {
-                                const fromName = categories.data?.find(c => c.id === r.fromCategoryId)?.name || String(r.fromCategoryId);
-                                const toName = categories.data?.find(c => c.id === r.toCategoryId)?.name || String(r.toCategoryId);
+                            {rows.map((r) => {
+                                const fromName =
+                                    categories.data?.find((c) => c.id === r.fromCategoryId)?.name ||
+                                    String(r.fromCategoryId);
+                                const toName =
+                                    categories.data?.find((c) => c.id === r.toCategoryId)?.name ||
+                                    String(r.toCategoryId);
                                 const inEdit = editId === r.id;
                                 if (inEdit) {
                                     const [d, m, y] = formatDateSL(r.transferDate).split("/");
                                     const iso = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
                                     return (
                                         <tr key={r.id}>
-                                            <td><input className="input" type="date" defaultValue={iso} id={`d-t-${r.id}`} /></td>
+                                            <td>
+                                                <input
+                                                    className="input"
+                                                    type="date"
+                                                    defaultValue={iso}
+                                                    id={`d-t-${r.id}`}
+                                                />
+                                            </td>
                                             <td>{fromName}</td>
                                             <td>{toName}</td>
-                                            <td><input className="input" defaultValue={r.description || ""} id={`t-t-${r.id}`} /></td>
-                                            <td className="right"><input className="input" defaultValue={String(r.amount)} id={`a-t-${r.id}`} /></td>
+                                            <td>
+                                                <input
+                                                    className="input"
+                                                    defaultValue={r.description || ""}
+                                                    id={`t-t-${r.id}`}
+                                                />
+                                            </td>
+                                            <td className="right">
+                                                <input
+                                                    className="input"
+                                                    defaultValue={String(r.amount)}
+                                                    id={`a-t-${r.id}`}
+                                                />
+                                            </td>
                                             <td className="right row-actions">
-                                                <button onClick={() => update.mutate({
-                                                    id: r.id,
-                                                    amount: (document.getElementById(`a-t-${r.id}`) as HTMLInputElement).value,
-                                                    description: (document.getElementById(`t-t-${r.id}`) as HTMLInputElement).value,
-                                                    date: (document.getElementById(`d-t-${r.id}`) as HTMLInputElement).value
-                                                })}>Shrani</button>
-                                                <button className="secondary" onClick={() => setEditId(null)}>Prekliči</button>
+                                                <button
+                                                    onClick={() =>
+                                                        update.mutate({
+                                                            id: r.id,
+                                                            amount: (document.getElementById(
+                                                                `a-t-${r.id}`
+                                                            ) as HTMLInputElement).value,
+                                                            description: (document.getElementById(
+                                                                `t-t-${r.id}`
+                                                            ) as HTMLInputElement).value,
+                                                            date: (document.getElementById(
+                                                                `d-t-${r.id}`
+                                                            ) as HTMLInputElement).value,
+                                                        })
+                                                    }
+                                                >
+                                                    Shrani
+                                                </button>
+                                                <button className="secondary" onClick={() => setEditId(null)}>
+                                                    Prekliči
+                                                </button>
                                             </td>
                                         </tr>
                                     );
@@ -246,10 +347,14 @@ export default function Transfers() {
                                         <td>{fromName}</td>
                                         <td>{toName}</td>
                                         <td>{r.description || ""}</td>
-                                        <td className="right"><Amount value={r.amount} /></td>
+                                        <td className="right">
+                                            <Amount value={r.amount} />
+                                        </td>
                                         <td className="right row-actions">
                                             <button onClick={() => setEditId(r.id)}>Uredi</button>
-                                            <button className="danger" onClick={() => remove.mutate(r.id)}>Izbriši</button>
+                                            <button className="danger" onClick={() => remove.mutate(r.id)}>
+                                                Izbriši
+                                            </button>
                                         </td>
                                     </tr>
                                 );
@@ -261,9 +366,7 @@ export default function Transfers() {
 
                 <aside className="charts-aside">
                     <div className="card chart-card">
-                        <div className="card-body">
-                            {Chart}
-                        </div>
+                        <div className="card-body">{Chart}</div>
                     </div>
                 </aside>
             </div>
